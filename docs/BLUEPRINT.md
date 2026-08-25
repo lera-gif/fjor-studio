@@ -260,6 +260,24 @@ thing in their tool and the part with the most scar tissue.
 `is_speech_only()` returns **False** for an empty issue list on purpose: a
 verdict that failed while naming nothing is not evidence of anything.
 
+### 3.5b A blocking verdict can be accepted, never erased
+
+Preflight stops a delivery on a critical clip verdict, and sometimes the right
+answer is to ship anyway: LME109's scene 0 held up four fingers on the word
+"three" and scene 2 under-performed its leg swing, and re-buying both was 446
+credits against flaws the owner judged smaller than that.
+
+The two ways a person reaches for that outcome unaided — turning QA off, or
+editing the verdict — both destroy the finding, and the creative then looks
+clean to whoever opens the week folder next year. So there is `waive`: the
+verdict stays exactly as written, the check keeps reporting that it failed and
+which scenes, and the acceptance is recorded beside it. It is per-scene, it
+needs a reason, and there is no blanket form. The waiver travels into the build
+manifest that ships next to the file, which is why waiving rewinds to `finalize`
+rather than straight to `delivery` — the manifest is part of the deliverable,
+and one written before the decision would describe a creative that does not
+exist.
+
 ### 3.6 Clips do not auto-regenerate by default; plates do
 
 A clip re-roll costs real money and frequently returns the *same* artifact —
@@ -575,7 +593,9 @@ for the API facts that were expensive to learn.
 16. A subtitle word holds until the next word or `MAX_HOLD_S`, whichever is
     sooner. Chain-linking across a silence leaves a word on screen for as long
     as the silence lasts.
-17. Whatever a derived job inherits, it inherits WHOLE. The cast travels with
+17. A QA verdict is accepted, never erased. `waive` is per-scene, needs a
+    reason, and leaves the finding in the report and the shipped manifest.
+18. Whatever a derived job inherits, it inherits WHOLE. The cast travels with
     the prompts that name it, or the child is unanchored and every plate
     invents a face. Nothing unanchorable is ever paid for. Whether the FACE
     travels is the producer's call, not a default.

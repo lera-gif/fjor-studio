@@ -214,6 +214,24 @@ def test_a_blocking_clip_verdict_fails_preflight(home, reference):
     assert "preflight failed" in job.error
     report = json.loads((store.job_dir(job.id) / "review" / "preflight.json").read_text())
     assert report["failed"] == ["clip QA"]
+    # the failure has to say WHICH shot and what would help. LME109 got
+    # "preflight failed: clip QA", retried -- the only move the message
+    # suggests -- and failed identically, because retry re-reads the same file.
+    assert "blocking: [0]" in job.error
+    assert "revise" in job.error and "--scene" in job.error
+    assert "Retrying cannot help" in job.error
+
+
+def test_retrying_a_failed_preflight_changes_nothing(home, reference):
+    """Not a hypothetical: it is the first thing a producer tries."""
+    _cfg, _store, engine, job = setup(home, reference, scenes=1,
+                                      clip_qa=qa_critical())
+    job = engine.approve(engine.approve(engine.approve(engine.run(job))))
+    spent, error = job.spent, job.error
+    job = engine.retry(job)
+    assert job.state == "failed"
+    assert job.error == error          # the same verdict on the same file
+    assert job.spent == spent          # and it cost nothing to learn that twice
 
 
 def test_a_silent_clip_under_an_external_voice_does_not_fail_preflight(home, reference):
@@ -440,3 +458,55 @@ def test_a_consumed_prompts_revision_is_not_applied_twice(home, reference):
              if c["op"] == "submit" and c["kind"] == "text"]
     assert len(texts) == count + 1
     assert "different angle" not in texts[-1]
+
+
+# -- shipping a known defect on purpose --------------------------------------
+
+def test_a_waived_scene_delivers_and_the_defect_travels_with_it(home, reference):
+    """Sometimes a re-buy costs more than the flaw does, and that is the
+    producer's call. What must not happen is the finding disappearing: turning
+    QA off or editing the verdict would deliver a creative that looks clean to
+    whoever opens the folder next year."""
+    _cfg, store, engine, job = setup(home, reference, scenes=1,
+                                     clip_qa=qa_critical())
+    job = engine.approve(engine.approve(engine.approve(engine.run(job))))
+    assert job.state == "failed"
+
+    job = engine.waive(job, [0], "a swoosh nobody will see at 9:16; ships")
+    job = engine.retry(job)
+    assert job.state == "done"
+
+    # the verdict is untouched -- it was accepted, not deleted
+    assert job.scenes[0]["clip_qa"]["severity"] == "critical"
+    report = json.loads((store.job_dir(job.id) / "review" / "preflight.json").read_text())
+    qa = [c for c in report["checks"] if c["name"] == "clip QA"][0]
+    assert "blocking: [0]" in qa["detail"]
+    assert "WAIVED" in qa["detail"] and "ships" in qa["detail"]
+    manifest = json.loads(
+        (store.job_dir(job.id) / "finals" / "build_manifest.json").read_text())
+    assert manifest["waived_clip_qa"] == [0]
+    assert "swoosh" in manifest["waiver_note"]
+    assert any(e["type"] == "qa_waived" for e in job.events)
+
+
+def test_a_waiver_is_per_scene_and_needs_a_reason(home, reference):
+    _cfg, _store, engine, job = setup(home, reference, scenes=1,
+                                      clip_qa=qa_critical())
+    job = engine.approve(engine.approve(engine.approve(engine.run(job))))
+    with pytest.raises(TransitionError):
+        engine.waive(job, [], "everything is fine")      # no blanket waiver
+    with pytest.raises(TransitionError):
+        engine.waive(job, [0], "   ")                    # no silent waiver
+    with pytest.raises(TransitionError):
+        engine.waive(job, [1], "not blocking")           # nothing to accept
+    assert not job.meta.get("waived_clip_qa")
+
+
+def test_waiving_one_scene_does_not_release_another(home, reference):
+    _cfg, _store, engine, job = setup(home, reference, scenes=2,
+                                      clip_qa=qa_critical())
+    job = engine.approve(engine.approve(engine.approve(engine.run(job))))
+    job = engine.waive(job, [0], "accepted on 0 only")
+    job = engine.retry(job)
+    assert job.state == "failed"                          # 1 still blocks
+    assert "blocking: [0, 1]" in job.error

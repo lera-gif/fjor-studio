@@ -94,6 +94,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     r.add_argument("--note", default="")
     r.add_argument("--scene", type=int, action="append", dest="scenes")
 
+    w = sub.add_parser("waive", help="ship a scene whose QA verdict blocks it")
+    w.add_argument("job_id")
+    w.add_argument("--scene", type=int, action="append", dest="scenes",
+                   help="repeatable; there is no blanket waiver")
+    w.add_argument("--note", default="", help="why it ships anyway (required)")
+
     dv = sub.add_parser("derive", help="make a variation of a finished job")
     dv.add_argument("job_id")
     dv.add_argument("name", help="the new creative name")
@@ -247,6 +253,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         job = engine.approve(job, args.note)
     elif args.cmd == "revise":
         job = engine.revise(job, args.what, args.note, args.scenes)
+    elif args.cmd == "waive":
+        job = engine.waive(job, args.scenes or [], args.note)
+        print(f"waived scene(s) {job.meta['waived_clip_qa']}; "
+              f"`run {job.id}` re-makes the masters with the waiver in their "
+              f"manifest, then preflights and delivers")
+        return 0
     elif args.cmd == "retry":
         job = engine.retry(job)
     elif args.cmd == "reassemble":

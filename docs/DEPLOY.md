@@ -60,6 +60,18 @@ cannot produce a deliverable cut without them. Two things are not:
 Neither stops a job. Copy them across from an existing studio if the team wants
 the same library.
 
+### Keeping a shared copy up to date
+
+`scripts/share_copy.sh` rebuilds the shareable copy from the current commit:
+the whole repo minus the delivery root and the internal audit, with a banner on
+the README. It adds a commit to that copy rather than re-initialising it, so it
+can be pushed and pulled normally, and it refuses to run against a dirty tree or
+to leave an absolute home path behind.
+
+```bash
+./scripts/share_copy.sh [path]        # default: ../fjor-studio-share
+```
+
 ---
 
 ## 2. Configure it

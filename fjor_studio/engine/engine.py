@@ -232,6 +232,56 @@ class Engine:
         self.store.save(job)
         return self.run(job)
 
+    def waive(self, job: Job, scenes: List[int], note: str = "") -> Job:
+        """Accept named blocking clip verdicts and let the job deliver.
+
+        The alternative people reach for is turning QA off or editing the
+        verdict, and both destroy the finding. This keeps it: preflight still
+        reports the check as having failed, names the scenes, and records that a
+        person accepted them. The waiver travels into the build manifest, so the
+        delivered creative carries its own known defects rather than looking
+        clean to whoever opens the folder next year.
+
+        A waiver is per-scene and deliberate. There is no waive-everything."""
+        from ..qa import blocking_scenes
+        blocked = blocking_scenes(job.scenes, "clip_qa")
+        asked = [int(i) for i in (scenes or [])]
+        if not asked:
+            raise TransitionError(
+                "waive needs the scene(s) to accept -- there is no blanket "
+                f"waiver. Blocking right now: {blocked or 'none'}")
+        unknown = [i for i in asked if i not in blocked]
+        if unknown:
+            raise TransitionError(
+                f"scene(s) {unknown} are not blocking, so there is nothing to "
+                f"waive. Blocking: {blocked or 'none'}")
+        if not note.strip():
+            raise TransitionError(
+                "a waiver needs a reason: it is the only record of why a known "
+                "defect shipped")
+        job.meta["waived_clip_qa"] = sorted(
+            set(job.meta.get("waived_clip_qa") or []) | set(asked))
+        job.meta["waiver_note"] = note.strip()
+        issues = []
+        for idx in asked:
+            verdict = job.scene(idx).clip_qa or {}
+            issues += [f"scene {idx}: {i}" for i in (verdict.get("issues") or [])]
+        job.add_event(
+            "qa_waived",
+            f"scene(s) {sorted(asked)} shipped with a critical verdict "
+            f"accepted by the producer: {note.strip()}",
+            scenes=sorted(asked), issues=issues)
+        # Back to `finalize`, not straight to `preflight`: the build manifest is
+        # part of the deliverable and it was written before the waiver existed.
+        # Delivering the old one would put a file in the week folder whose own
+        # record says it shipped clean. Costs nothing -- finalize is ffmpeg.
+        if job.state in ("failed", "preflight", "delivery"):
+            job.state = "finalize"
+            job.error = None
+            job.gate_ready = False
+        self.store.save(job)
+        return job
+
     def retry(self, job: Job) -> Job:
         """Resume a failed job: put it back on the stage that errored and run."""
         if job.state != "failed":

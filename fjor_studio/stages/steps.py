@@ -1083,7 +1083,11 @@ def finalize(ctx: StageContext) -> None:
                 "spent": round(ctx.job.spent, 2),
                 "spent_by_backend": ctx.job.spent_by_backend(),
                 "scenes": [{"idx": s["idx"], "duration_s": s["duration_s"],
-                            "clip_qa": s.get("clip_qa")} for s in ctx.job.scenes]}
+                            "clip_qa": s.get("clip_qa")} for s in ctx.job.scenes],
+                # shipped with known defects, and saying so: the folder outlives
+                # everyone's memory of the decision
+                "waived_clip_qa": sorted(ctx.job.meta.get("waived_clip_qa") or []),
+                "waiver_note": ctx.job.meta.get("waiver_note") or ""}
     (ctx.dir("finals") / "build_manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     ctx.job.meta["finals_manifest"] = written
@@ -1094,8 +1098,18 @@ def preflight(ctx: StageContext) -> None:
     report = run_checks(ctx)
     _write_review(ctx, "preflight.json", report)
     if report["failed"]:
-        raise GenError("preflight failed: "
-                       + "; ".join(c["name"] for c in report["checks"] if not c["ok"]))
+        # The name of a check is not a fault. "clip QA" told a producer nothing
+        # about WHICH scenes, and the obvious next move -- retry -- re-runs the
+        # same checks over the same files and fails identically. LME109 did
+        # exactly that.
+        bad = [c for c in report["checks"] if not c["ok"]]
+        raise GenError(
+            "preflight failed: "
+            + "; ".join(f"{c['name']} ({c['detail']})" for c in bad)
+            + ". Retrying cannot help -- these checks read the files that are "
+              "already on disk. A blocking clip verdict means buying that shot "
+              "again: `revise <id> clip --scene N` with a note saying what was "
+              "wrong, which re-cuts and re-checks everything after it.")
 
 
 def delivery(ctx: StageContext) -> None:

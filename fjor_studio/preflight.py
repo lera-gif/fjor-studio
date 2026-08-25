@@ -52,14 +52,25 @@ def run_checks(ctx) -> Dict[str, Any]:
 
     # QA that should stop delivery. `blocking` already excludes technical
     # failures and intended-silence verdicts.
+    #
+    # A waiver does not delete the verdict or soften it: the defect is still
+    # named here, in the manifest, and in the job's events. It records that a
+    # person read it and shipped anyway, which is a producer's call to make --
+    # sometimes a re-buy costs more than the flaw does. What must never happen
+    # is the finding quietly disappearing, so the check keeps SAYING it failed
+    # and reports who accepted it.
     from .qa import blocking_scenes
     blocked = blocking_scenes(job.scenes, "clip_qa")
+    waived = sorted(int(i) for i in (job.meta.get("waived_clip_qa") or []))
+    unwaived = [i for i in blocked if i not in waived]
     judged = [s["idx"] for s in job.scenes if s.get("clip_qa")]
-    checks.append(_check(
-        "clip QA", not blocked,
-        f"{len(judged)} of {len(job.scenes)} scenes have a verdict; "
-        f"blocking: {blocked or 'none'}",
-        looked=bool(judged)))
+    detail = (f"{len(judged)} of {len(job.scenes)} scenes have a verdict; "
+              f"blocking: {blocked or 'none'}")
+    if waived:
+        note = str(job.meta.get("waiver_note") or "").strip()
+        detail += (f"; WAIVED by the producer: {waived}"
+                   + (f" — {note}" if note else ""))
+    checks.append(_check("clip QA", not unwaived, detail, looked=bool(judged)))
 
     missing = [s["idx"] for s in job.scenes if not s.get("clip")]
     checks.append(_check("every scene has a clip", not missing,

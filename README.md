@@ -74,6 +74,7 @@ against the cut, not imagined before it.
 | `run <id>` | advance to the next gate (this is also *resume*) |
 | `approve <id>` / `revise <id> <what> [--scene N]` | pass or bounce a gate |
 | `retry <id>` | resume a failed job from the stage that errored |
+| `waive <id> --scene N --note "why"` | ship a scene whose QA verdict blocks it — the verdict stays, the reason travels into the manifest |
 | `reassemble <id>` | re-cut from existing clips — costs nothing |
 | `derive <id> <name> [--from assembly\|clips\|plates\|prompts]` | a variation of a finished job |
 | `status <id>` / `list` | look |
@@ -107,7 +108,7 @@ already shipped is never reused.
 ./.venv/bin/python -m pytest -q
 ```
 
-381 tests. They execute the pipeline; none of them pass by reading source.
+385 tests. They execute the pipeline; none of them pass by reading source.
 
 ## Docs
 
