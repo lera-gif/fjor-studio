@@ -1,0 +1,22 @@
+# Vertical registry: the id prefix a job's creative id is built from, and the
+# folder its finals are delivered into.
+#
+# Both are LIVE conventions, read off the delivery tree (delivery.yaml `root`)
+# and fjor-video's own registry. Folder names are exact, including the spaces --
+# they are existing directories on disk, not names we get to choose.
+#
+# An unknown vertical is refused at INTAKE, where nothing has been paid for yet.
+# By delivery the creative is built and paid for, so the lookup there is
+# non-strict and falls back to the raw name rather than stranding finished files.
+
+verticals:
+  menopause_yoga:   {prefix: MENY,  folder: "MENOPAUSE YOGA"}
+  yoga:             {prefix: "Y",   folder: "YOGA"}
+  yoga_men:         {prefix: YM,    folder: "YOGA FOR MEN"}
+  pilates:          {prefix: PIL,   folder: "PILATES"}
+  lipedema_pilates: {prefix: LIPIL, folder: "LIPEDEMA PILATES"}
+  military:         {prefix: MIW,   folder: "MILITARY WORKOUT"}
+  lymph_exercise:   {prefix: LME,   folder: "LYMPH EXERCISE"}
+  lymph_walking:    {prefix: LW,    folder: "LYMPH WALKING"}
+  bp_walking:       {prefix: BPW,   folder: "BLOOD PRESSURE WALKING"}
+  lymph_massage:    {prefix: LMM,   folder: "LYMPH MASSAGE"}

@@ -1,0 +1,75 @@
+# How the pipeline behaves. Every value here mirrors a switch the colleague's
+# tool already ships; the comments say what changing it costs.
+
+analysis:
+  depth: default        # default (1 pass) | deep (2) | bulletproof (3, adds a voice cross-check)
+  ref_kind: ugc         # ugc | replica (replica copies the reference frame exactly)
+
+prompts:
+  self_audit: true      # a second pass over the writer's own output; catches missed substitutions
+  validation: true
+  # The video model's HARD limits, applied when the plan is read rather than
+  # trusted to the prompt. LIPIL050's writer returned 2s, 1s and 2s shots and
+  # the job died inside `clips`, after five plates had been paid for.
+  duration_s:
+    min: 4
+    max: 15
+
+qa:
+  enabled: true         # master switch for ALL media QA
+  plates:
+    enabled: true
+    auto_regen: true    # plates are cheap, and a re-roll usually helps
+    max_attempts: 2
+  clips:
+    enabled: true
+    auto_regen: false   # a clip re-roll costs real money and often returns the
+    max_attempts: 1     # same deterministic artifact -- ask a human by default
+
+gates:
+  # Only GATE_PLAN may be listed. GATE_PLATES guards the video spend and
+  # GATE_DRAFT is the last look at the cut; listing either is a hard error.
+  skip: [GATE_PLAN]
+
+voice:
+  # seedance = the video model speaks the lines with the picture.
+  # elevenlabs / external = a separate track, so clips are MEANT to be silent
+  # and a "nobody speaks" QA verdict is the plan, not a defect.
+  source: seedance
+
+delivery:
+  formats: ["9:16", "4:5"]
+
+subtitles:
+  enabled: true
+  style: bold-pop       # one word at a time, CapCut-style
+  colour: yellow        # white | yellow | red | green
+  size: medium          # small 56 | medium 72 | large 90
+  font: Inter           # shipped in assets/fonts -- NOT installed system-wide
+  # Whisper puts word starts slightly late. The colleague tried compensating by
+  # 0.20s and reverted it because it looked worse. Left at 0 on purpose.
+  lead_s: 0.0
+  # Named up front so Whisper spells them right, rather than repairing after.
+  vocabulary_hint: "Pilates, Wall Pilates, lymphatic, cortisol, lbs"
+
+edit:
+  # Dissolve between shots. Every transition EATS its own duration, so the cut
+  # gets (n-1) * crossfade_s shorter -- the assembler measures the result rather
+  # than summing the parts, which is also what keeps subtitle timings honest.
+  crossfade_s: 0.5
+  crossfade_into_packshot: true
+  # A bed from assets/music bed/, by file stem. Empty = no music.
+  music: ""
+  music_volume: 0.25
+  # Ducks the bed under speech with sidechaincompress. Builds without that
+  # filter fall back to a flat mix rather than dropping the music.
+  music_duck: true
+
+characters:
+  # One portrait per recurring character, attached to every shot they appear in.
+  # Without it each plate invents a face from the same words, and a five-shot
+  # podcast ad comes back as three different women in the same navy top.
+  enabled: true
+  # Two faces is what an image model can hold. Beyond that the references start
+  # competing and the result drifts toward an average of them.
+  max_anchors: 2

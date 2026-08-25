@@ -1,0 +1,24 @@
+# Which backend serves each kind, and which model it runs.
+# Verified live 2026-08-18: every model below exists on this account.
+
+providers:
+  analysis: gemini      # reference-video understanding, and media QA
+  text:     gemini      # prompt writing (owner call: Gemini for all of it)
+  image:    kie         # nano-banana-pro, the colleague's default
+  video:    kie         # seedance
+  speech:   gemini      # ElevenLabs is out of quota
+
+models:
+  analysis: gemini-3.1-pro-preview
+  text:     gemini-3.1-pro-preview
+  qa:       gemini-3-flash-preview
+  image:    nano-banana-pro
+  video:    bytedance/seedance-2-fast
+  speech:   gemini-2.5-flash-preview-tts
+
+# Per-call knobs. `thinking_budget: 0` turns reasoning off, which for media QA
+# produced byte-identical verdicts for free (measured 2026-08-18).
+options:
+  qa:       {json: true, thinking_budget: 0}
+  text:     {json: true}
+  analysis: {}

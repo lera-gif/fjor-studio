@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "studio-dashboard",
+      "runtimeExecutable": "./.venv/bin/python",
+      "runtimeArgs": ["-m", "fjor_studio.cli", "dashboard", "--port", "8422"],
+      "port": 8422
+    }
+  ]
+}

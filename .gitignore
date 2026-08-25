@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.DS_Store
+
+# never commit live keys, and never commit job media
+config/auth.yaml
+jobs/
+.tokens/
+
+# The asset library is large binary, with two exceptions the pipeline cannot run
+# without: the approved disclaimer overlays, and the packshot. Delivery appends
+# the packshot to every cut, so a checkout without one fails every job -- and at
+# under a megabyte for both sizes it is not what makes this repo large. The beds
+# (11M) and the demo clips (24M) are optional and stay out; drop your own in.
+assets/music bed/
+assets/demos/*.mp4
+
+# dropped reference videos, staged before a job copies them into ref/
+uploads/

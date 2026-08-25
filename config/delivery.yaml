@@ -1,0 +1,43 @@
+# Where finals land, and what they are called.
+#
+# This is an EXISTING convention with existing files in it. Both halves are
+# matched exactly: a week folder inside the vertical folder, and the token
+# filename that the ad platform, the manifests and every past creative use.
+
+# Per machine. $FJOR_STUDIO_DELIVERY_ROOT overrides it, which is how one
+# checkout serves several machines without editing a tracked file. Empty here
+# means intake refuses every job, rather than a run being paid for and then
+# delivered somewhere nobody looks.
+# e.g. "/mnt/creative/VIDEO", or "~/Desktop/FJOR CREATIVE FACTORY/VIDEO".
+# Left empty on purpose: intake refuses every job until this is set, which is
+# better than a run being paid for and delivered somewhere nobody looks.
+root: ""
+week_folder: "{week} week"          # e.g. "34 week" -- note the space
+
+# Delivery NEVER hard-deletes. A stale file with the same name is moved here
+# with a timestamp prefix, so a redelivery can always be undone.
+trash_subfolder: "_to_delete"
+
+naming:
+  template: "n-{id}_ch-{channel}_t-{type}_c-{concept}_pr-{producer}_ds-{source}_w-{week}_s-{w}x{h}.{ext}"
+  channel: fb
+  type: video
+  # `ds-nano` = any AI-generated creative, whichever model made it. The client
+  # calls all of it nano. `st`/`ns` are the template/seedance pipelines, `lp` is
+  # in-house Figma.
+  source: nano
+  # `pr-` is the PRODUCER'S INITIALS. The vendored naming.md calls it "funnel";
+  # that reading is wrong and was corrected by the owner on 2026-08-03. Free
+  # text -- the list below is the known values, not a whitelist.
+  producers: [lp, ts, am, ag, kk]
+  default_producer: lp
+
+# Ship both, every time.
+sizes:
+  "9:16": [1080, 1920]
+  "4:5":  [1080, 1350]
+
+# Encode settings for the finals.
+export:
+  crf: 21
+  preset: veryfast

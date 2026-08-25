@@ -1,0 +1,18 @@
+# Copy to auth.yaml and fill in. auth.yaml is gitignored and must stay that way.
+# The colleague's kit export carries these same keys in PLAINTEXT -- mask on
+# read, never print, never commit.
+
+kie:        {api_key: "", base_url: "https://api.kie.ai", upload_base: "https://kieai.redpandaai.co"}
+fal:        {api_key: ""}
+gemini:     {api_key: ""}
+anthropic:  {api_key: ""}
+openai:     {api_key: ""}
+elevenlabs: {api_key: ""}
+higgsfield: {api_key: ""}
+
+# Only needed if the dashboard is served anywhere but 127.0.0.1. It has no other
+# authentication, and every gate it shows can be approved -- approving one
+# spends credits. `serve()` refuses a non-loopback bind without this (or
+# $FJOR_STUDIO_TOKEN). Use a long random string:
+#     python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+dashboard:  {token: ""}
