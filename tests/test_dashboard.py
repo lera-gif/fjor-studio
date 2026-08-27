@@ -933,3 +933,15 @@ def test_the_token_is_never_printed_by_config(home, monkeypatch):
     cfg, _s, _e = open_studio(home)
     cfg.auth["dashboard"] = {"token": "s3cret-token"}
     assert "s3cret-token" not in json.dumps(cfg.redacted())
+
+
+def test_the_bed_picker_groups_by_folder_and_keeps_a_legacy_name(live):
+    """109 beds flat is not a picker. And a job recorded before the library was
+    filed carries a bare name that is no longer in the list -- dropping it would
+    silently clear the bed on the next re-cut."""
+    from fjor_studio.dashboard.page import PAGE
+    assert "function musicOptions(" in PAGE
+    assert "<optgroup" in PAGE
+    assert "(as recorded)" in PAGE          # not "missing": it still resolves
+    # both pickers go through it rather than building their own list
+    assert PAGE.count("musicOptions(") >= 3

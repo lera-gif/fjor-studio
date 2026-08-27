@@ -108,7 +108,7 @@ already shipped is never reused.
 ./.venv/bin/python -m pytest -q
 ```
 
-385 tests. They execute the pipeline; none of them pass by reading source.
+390 tests. They execute the pipeline; none of them pass by reading source.
 
 ## Docs
 

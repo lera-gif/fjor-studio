@@ -495,11 +495,13 @@ function musicOptions(library, current, firstLabel){
     if(!groups.has(folder)) groups.set(folder, []);
     groups.get(folder).push([name, leaf]);
   }
-  // a bed recorded before the library was filed keeps a bare name; show it
-  // rather than dropping it off the end of the list
+  // A bed recorded before the library was filed keeps its bare name, which is
+  // not in the list any more -- it is shown as-is rather than dropped, and
+  // labelled "as recorded" rather than "missing": it still resolves, the job
+  // simply predates the folders.
   let html = firstLabel;
   if(current && !(library||[]).includes(current))
-    html += `<option value="${esc(current)}" selected>${esc(current)} (not in the library)</option>`;
+    html += `<option value="${esc(current)}" selected>${esc(current)} (as recorded)</option>`;
   for(const [folder, items] of [...groups.entries()].sort())
     html += `<optgroup label="${esc(folder)}">`
       + items.map(([value, leaf]) =>
