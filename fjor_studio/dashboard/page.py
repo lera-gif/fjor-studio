@@ -483,6 +483,31 @@ async function applyEdit(){
   await act('edit',{edit:{order:EDIT.order,music:EDIT.music,subtitles:EDIT.subtitles},
                     recut:recut});
 }
+// The bed library is filed by mood, and its names carry the folder. A flat list
+// of 109 is not something a producer can choose from, so the folder becomes an
+// <optgroup> and the option shows only the bed's own name.
+function musicOptions(library, current, firstLabel){
+  const groups = new Map();
+  for(const name of (library||[])){
+    const cut = name.lastIndexOf('/');
+    const folder = cut < 0 ? 'Loose' : name.slice(0, cut);
+    const leaf = cut < 0 ? name : name.slice(cut + 1);
+    if(!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder).push([name, leaf]);
+  }
+  // a bed recorded before the library was filed keeps a bare name; show it
+  // rather than dropping it off the end of the list
+  let html = firstLabel;
+  if(current && !(library||[]).includes(current))
+    html += `<option value="${esc(current)}" selected>${esc(current)} (not in the library)</option>`;
+  for(const [folder, items] of [...groups.entries()].sort())
+    html += `<optgroup label="${esc(folder)}">`
+      + items.map(([value, leaf]) =>
+          `<option value="${esc(value)}" ${value===current?'selected':''}>${esc(leaf)}</option>`).join('')
+      + `</optgroup>`;
+  return html;
+}
+
 function editorCard(d){
   if(!(d.edit&&d.edit.open)) return '';
   const e=editState(d), busy=d.busy, dirty=editDirty(d);
@@ -525,8 +550,10 @@ function editorCard(d){
       ${out.map(i=>chip(i,-1)).join('')}</div>
     <div class="row" style="gap:18px">
       <div><label>Music bed</label>
-        ${sel(e.music||'',[['','— none —'],...(e.music_library||[]).map(m=>[m,m])],
-              'setEdit(\'music\',this.value)')}</div>
+        <select ${busy?'disabled':''} onchange="setEdit('music',this.value)">
+          ${musicOptions(e.music_library, e.music||'',
+            `<option value="" ${e.music?'':'selected'}>— none —</option>`)}
+        </select></div>
       <div><label>Subtitles</label>
         ${sel(subs.enabled?'on':'off',[['on','burned in'],['off','none']],
               'setSubs(\'enabled\',this.value===\'on\')')}</div>
@@ -726,8 +753,8 @@ function openDerive(){
     ||(d.intake.creative_name||'').replace(/n-[A-Za-z0-9]+/,'n-'+(d.next_id||''));
   $('#devPackshot').innerHTML='<option value="">same as parent</option>'
     +o.packshots.map(p=>`<option>${esc(p)}</option>`).join('');
-  $('#devMusic').innerHTML='<option value="">same as parent</option><option value="none">no music</option>'
-    +o.music.map(m=>`<option>${esc(m)}</option>`).join('');
+  $('#devMusic').innerHTML=musicOptions(o.music, '',
+    '<option value="">same as parent</option><option value="none">no music</option>');
   $('#devXfade').value=''; $('#devNote').value='';
   $('#devRecast').value=''; $('#devCastDesc').value='';
   $('#devRecast').onchange=()=>{

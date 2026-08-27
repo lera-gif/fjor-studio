@@ -20,6 +20,22 @@ approved compliance assets — do not regenerate or re-typeset them.**
 `disclaimers/` and `packshots/` are tracked: assembly cannot produce a
 deliverable cut without them, and together they are under a megabyte.
 
+### The bed library
+
+`music bed/` is filed by mood, one level deep, and a bed's name carries its
+folder: `Calm/Kyoto Stillness`. A bare name still resolves, so jobs recorded
+before the library was filed keep their music when they are re-cut.
+
+`_to_delete/` is out of circulation and invisible to the picker — it holds
+commercial masters that were in the library by accident. A recognisable
+record in a Meta ad gets the video muted or claimed, so they are kept out of
+reach rather than left one click away in a dropdown.
+
+The rest of `Stock library/` is the YouTube Audio Library roster. "Free" there
+means free ON YOUTUBE: several tracks want attribution and the licence does not
+automatically cover a paid placement. Check before shipping one. Everything
+under the other folders is Suno-generated and therefore yours.
+
 `music bed/` and `demos/` are not — 35M of optional media. A checkout without
 them works; the editor's bed list is simply empty until files are dropped in.
 Any `.mp3` in `music bed/` and any `.mp4` in `demos/` is picked up by name.

@@ -163,13 +163,18 @@ def test_an_edit_at_the_clip_gate_waits_for_the_approval_that_cuts(home, referen
 def a_real_bed():
     """The suite runs against the real asset library, so the bed has to be one
     that is actually in it -- a made-up name is refused, which is its own test
-    below."""
+    below. The name is folder-qualified (`Calm/Kyoto`); the cut records the
+    FILE it used, which is the leaf."""
     import pathlib
     from fjor_studio.assemble import list_music
     beds = list_music(pathlib.Path(__file__).resolve().parents[1] / "assets")
     if not beds:
         pytest.skip("no music beds in assets/")
     return beds[0]
+
+
+def leaf(bed_name):
+    return bed_name.rsplit("/", 1)[-1]
 
 
 def test_the_music_bed_is_chosen_at_a_gate_not_in_the_brief(home, reference):
@@ -179,7 +184,8 @@ def test_the_music_bed_is_chosen_at_a_gate_not_in_the_brief(home, reference):
     assert job.meta["draft"]["music"] is None              # the brief did not ask
     job = engine.set_edit(job, {"music": bed})
     assert job.state == "GATE_DRAFT"                       # the re-cut succeeded
-    assert job.meta["draft"]["music"].startswith(bed)
+    assert job.meta["draft"]["music"].startswith(leaf(bed))
+    assert edit_of(job)["music"] == bed                    # the edit keeps the folder
     job = engine.set_edit(job, {"music": ""})
     assert job.meta["draft"]["music"] is None              # and can be taken off
 
@@ -199,7 +205,7 @@ def test_a_bed_named_in_the_brief_still_reaches_an_old_job(home, reference):
     _cfg, _store, engine, job = setup(home, reference)
     job.intake["music"] = bed
     job = engine.approve(engine.approve(engine.run(job)))
-    assert job.meta["draft"]["music"].startswith(bed)
+    assert job.meta["draft"]["music"].startswith(leaf(bed))
     assert edit_of(job)["music"] == bed
     job = engine.set_edit(job, {"music": ""})              # the gate overrides it
     assert job.meta["draft"]["music"] is None

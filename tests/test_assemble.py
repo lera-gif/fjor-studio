@@ -230,3 +230,58 @@ def test_the_cut_is_4_2_0_and_therefore_actually_plays(tmp_path):
          if s["codec_type"] == "video"][0]
     assert v["pix_fmt"] == "yuv420p", f"shipped as {v['pix_fmt']}: no browser decodes it"
     assert "4:4:4" not in v.get("profile", "")
+
+
+# -- the bed library is filed, not heaped ------------------------------------
+
+def beds(tmp_path, tree):
+    """A music library on disk. `tree` maps a relative path to a filename."""
+    import subprocess
+    root = tmp_path / "music bed"
+    for rel, names in tree.items():
+        d = root / rel if rel else root
+        d.mkdir(parents=True, exist_ok=True)
+        for name in names:
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                            "-i", "sine=frequency=440:duration=1", str(d / name)],
+                           check=True, capture_output=True)
+    return tmp_path
+
+
+def test_beds_are_found_in_their_folders_and_named_by_them(tmp_path):
+    """109 beds in one flat list is not something a producer can choose from,
+    so the library is filed by mood and the folder is part of the name."""
+    from fjor_studio.assemble import list_music
+    a = beds(tmp_path, {"Calm": ["Kyoto.mp3"], "Upbeat": ["Groove.mp3"],
+                        "": ["Loose.mp3"]})
+    assert list_music(a) == ["Calm/Kyoto", "Loose", "Upbeat/Groove"]
+
+
+def test_a_bed_recorded_before_the_library_was_filed_still_resolves(tmp_path):
+    """LME108 stored `Gridiron_Groove_...` with no folder. Re-cutting it after
+    the library was reorganised must not silently lose its music."""
+    from fjor_studio.assemble import music_for
+    a = beds(tmp_path, {"House": ["Gridiron_Groove_2026-08-14T125212.mp3"]})
+    found = music_for(a, "Gridiron_Groove_2026-08-14T125212")
+    assert found and found.parent.name == "House"
+    assert music_for(a, "House/Gridiron_Groove_2026-08-14T125212") == found
+    assert music_for(a, "House/Gridiron_Groove_2026-08-14T125212.mp3") == found
+
+
+def test_the_same_bed_filed_under_two_moods_is_reachable_as_both(tmp_path):
+    from fjor_studio.assemble import list_music, music_for
+    a = beds(tmp_path, {"Upbeat": ["Shinkansen.mp3"], "Japanese fun": ["Shinkansen.mp3"]})
+    assert list_music(a) == ["Japanese fun/Shinkansen", "Upbeat/Shinkansen"]
+    assert music_for(a, "Upbeat/Shinkansen").parent.name == "Upbeat"
+    assert music_for(a, "Japanese fun/Shinkansen").parent.name == "Japanese fun"
+
+
+def test_a_bed_in_the_trash_folder_cannot_be_chosen(tmp_path):
+    """Licensed masters are moved out of circulation, not deleted. A bed the
+    producer has retired must not come back through the picker."""
+    from fjor_studio.assemble import list_music, music_for
+    a = beds(tmp_path, {"Calm": ["Kyoto.mp3"],
+                        "_to_delete": ["Call Me Maybe.mp3"]})
+    assert list_music(a) == ["Calm/Kyoto"]
+    assert music_for(a, "Call Me Maybe") is None
+    assert music_for(a, "_to_delete/Call Me Maybe") is None

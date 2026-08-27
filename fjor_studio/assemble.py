@@ -457,21 +457,53 @@ def list_packshots(assets_dir: Path) -> List[str]:
 MUSIC_EXT = (".mp3", ".m4a", ".wav", ".aac", ".ogg")
 
 
-def list_music(assets_dir: Path) -> List[str]:
+# A bed the producer has taken out of circulation but not yet deleted. The name
+# matches the delivery convention, and anything under it is invisible here.
+MUSIC_TRASH = "_to_delete"
+
+
+def _music_files(assets_dir: Path) -> List[Path]:
     d = Path(assets_dir) / "music bed"
     if not d.is_dir():
         return []
-    return sorted(p.stem for p in d.iterdir()
-                  if p.suffix.lower() in MUSIC_EXT and not p.name.startswith("."))
+    return sorted(p for p in d.rglob("*")
+                  if p.is_file() and p.suffix.lower() in MUSIC_EXT
+                  and not p.name.startswith(".")
+                  and MUSIC_TRASH not in p.relative_to(d).parts)
+
+
+def list_music(assets_dir: Path) -> List[str]:
+    """Every bed, named by its folder and stem: `Calm/Kyoto Stillness`.
+
+    The library is filed by mood rather than heaped in one directory -- 109
+    beds in a flat list is not a thing anyone can choose from -- so the folder
+    is part of the name. A bed sitting loose at the top keeps its bare stem."""
+    d = Path(assets_dir) / "music bed"
+    out = []
+    for p in _music_files(assets_dir):
+        rel = p.relative_to(d)
+        out.append(str(rel.parent / rel.stem) if rel.parent != Path(".") else rel.stem)
+    return sorted(out)
 
 
 def music_for(assets_dir: Path, name: str) -> Optional[Path]:
-    """By file stem. `name` may also be the full filename."""
+    """The file behind a bed name.
+
+    Accepts the qualified name, the qualified filename, or a BARE stem -- the
+    last because jobs recorded before the library was filed into folders carry
+    `Gridiron_Groove_...` with no folder, and re-cutting one of those must not
+    silently lose its music."""
     d = Path(assets_dir) / "music bed"
     if not d.is_dir() or not name:
         return None
-    for p in sorted(d.iterdir()):
-        if p.suffix.lower() in MUSIC_EXT and name in (p.stem, p.name):
+    want = str(name).strip().replace("\\", "/")
+    files = _music_files(assets_dir)
+    for p in files:                                   # qualified, exact
+        rel = p.relative_to(d)
+        if want in (str(rel.parent / rel.stem), str(rel)):
+            return p
+    for p in files:                                   # bare stem or filename
+        if want in (p.stem, p.name):
             return p
     return None
 
