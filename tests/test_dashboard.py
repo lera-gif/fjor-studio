@@ -945,3 +945,30 @@ def test_the_bed_picker_groups_by_folder_and_keeps_a_legacy_name(live):
     assert "(as recorded)" in PAGE          # not "missing": it still resolves
     # both pickers go through it rather than building their own list
     assert PAGE.count("musicOptions(") >= 3
+
+
+def test_the_launcher_asks_the_server_a_question_not_the_port():
+    """A server can hold the port and be unable to read its own config -- that
+    is what happened on 2026-08-27. A launcher that only checks whether the port
+    answers reports "already running" and opens a dashboard where nothing works,
+    which is worse than saying nothing."""
+    import pathlib
+    launcher = (pathlib.Path(__file__).resolve().parents[1]
+                / "FJOR Studio.command").read_text()
+    assert "/api/state" in launcher            # a real question
+    assert "cannot answer for itself" in launcher
+    assert "stop_it" in launcher               # and it takes over
+    # it must never kill something that is not ours
+    assert "*fjor_studio*" in launcher
+    assert "is held by something that is not FJOR Studio" in launcher
+
+
+def test_the_restart_launcher_reuses_the_one_launcher():
+    """Two copies of this logic would drift, and the copy nobody runs is the
+    one that stays broken."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1]
+    restart = (root / "Restart FJOR Studio.command").read_text()
+    assert "FJOR_STUDIO_RESTART=1" in restart
+    assert "./FJOR Studio.command" in restart
+    assert "FJOR_STUDIO_RESTART" in (root / "FJOR Studio.command").read_text()

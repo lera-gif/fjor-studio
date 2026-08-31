@@ -272,16 +272,19 @@ def main(argv: Optional[List[str]] = None) -> int:
 def cli(argv=None) -> int:
     """`main` with the expected failures turned into a sentence.
 
-    Every exception below is a person's configuration being wrong, which on a
-    new deployment is most of them. A traceback reads as a broken program and
-    sends someone to the source; the message alone says what to fix."""
+    Every exception below is a person's configuration or environment being
+    wrong, which on a new deployment is most of them. A traceback reads as a
+    broken program and sends someone to the source; the message alone says what
+    to fix. PermissionError is in the list because a config file the process
+    cannot read is the most confusing of the lot -- it looks like the studio is
+    broken when it is the file, or the process, that is."""
     from .config import MissingDeliveryRoot, UnknownVertical
     from .gen.base import GenError
     from .engine.engine import TransitionError
     try:
         return main(argv)
     except (MissingDeliveryRoot, UnknownVertical, GenError, TransitionError,
-            FileNotFoundError) as exc:
+            FileNotFoundError, PermissionError, IsADirectoryError) as exc:
         print(f"fjor-studio: {exc}", file=sys.stderr)
         return 2
 

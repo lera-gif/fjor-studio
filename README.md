@@ -37,7 +37,8 @@ Then approve your way through:
 
 ## The dashboard
 
-Double-click **`FJOR Studio.command`**, or:
+Double-click **`FJOR Studio.command`** to open it, or **`Restart FJOR Studio.command`**
+to replace whatever is running with a fresh one. From a terminal:
 
 ```bash
 ./scripts/dashboard.sh --port 8422
@@ -45,6 +46,12 @@ Double-click **`FJOR Studio.command`**, or:
 
 It runs in the foreground and stops when you close the window. Starting it twice
 is harmless — the second one notices the first and opens the browser instead.
+
+"Notices" means it asks the running server a question, not just whether the port
+answers: a server can hold the port and be unable to read its own config, and a
+launcher that only pings the port would report all-clear and open a dashboard
+where every action fails. If the one it finds cannot answer, it says why and
+replaces it.
 
 It binds to `127.0.0.1` and has no login. Serving it anywhere else requires
 `FJOR_STUDIO_TOKEN`, and it refuses to start without one — every gate it shows
@@ -108,7 +115,7 @@ already shipped is never reused.
 ./.venv/bin/python -m pytest -q
 ```
 
-390 tests. They execute the pipeline; none of them pass by reading source.
+393 tests. They execute the pipeline; none of them pass by reading source.
 
 ## Docs
 

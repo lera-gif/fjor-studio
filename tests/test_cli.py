@@ -104,3 +104,22 @@ def test_a_paid_command_still_refuses_without_the_backend(home, reference, capsy
     assert code == 2
     err = capsys.readouterr().err
     assert "api_key" in err and "Traceback" not in err
+
+
+def test_a_config_it_cannot_read_is_a_sentence_too(home, reference, capsys):
+    """The dashboard held its port for an hour on 2026-08-27 while every request
+    failed on an unreadable pipeline.yaml. Whatever else that costs, it should
+    not also cost a traceback."""
+    import os
+    from fjor_studio.cli import cli
+    write_config(home)
+    target = home / "config" / "pipeline.yaml"
+    os.chmod(target, 0o000)
+    try:
+        code = cli(["--home", str(home), "list"])
+        err = capsys.readouterr().err
+    finally:
+        os.chmod(target, 0o644)
+    assert code == 2
+    assert "Traceback" not in err
+    assert "pipeline.yaml" in err
