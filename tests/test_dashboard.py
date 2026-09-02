@@ -1247,3 +1247,40 @@ def test_the_page_offers_the_setting_rather_than_only_the_error():
     for needle in ("No delivery folder yet", "Set the delivery folder…",
                    "renderSetup()", "/api/delivery", "It can be ANY folder"):
         assert needle in PAGE, needle
+
+
+def test_a_studio_with_no_keys_can_still_be_opened_and_looked_at(tmp_path):
+    """The bug a shipped zip exposed: backends were built when a studio was
+    OPENED, so a fresh deploy with no keys could not render the dashboard at
+    all -- and the controls that load the keys and set the delivery folder were
+    both on that page. A key is needed to RUN a job, not to look at one."""
+    import yaml
+    home = tmp_path / "h"
+    write_config(home)                      # no auth.yaml at all
+    (home / "config" / "models.yaml").write_text(yaml.safe_dump({
+        "providers": {"analysis": "gemini", "text": "gemini", "image": "kie",
+                      "video": "kie", "speech": "gemini"}}))
+    studio = Studio(home)
+    assert studio.overview()["jobs"] == []          # renders
+    assert studio.delivery_status()["set"] in (True, False)
+    from fjor_studio import kit as kit_mod
+    kit_mod.clear()
+
+
+def test_but_a_missing_key_still_stops_a_job_before_anything_is_bought(tmp_path,
+                                                                      reference):
+    """The protection laziness could have cost. Same guarantee, same moment."""
+    import yaml
+    from fjor_studio.gen.base import GenError
+    home = tmp_path / "h"
+    write_config(home)
+    (home / "config" / "models.yaml").write_text(yaml.safe_dump({
+        "providers": {"analysis": "gemini", "text": "gemini", "image": "kie",
+                      "video": "kie", "speech": "gemini"}}))
+    cfg, store, engine = open_studio(home)
+    job = make_job(store, reference, scenes=1, config=cfg)
+    job = engine.run(job)
+    assert job.state == "failed"
+    assert "api_key" in job.error and "intake" in job.error
+    assert job.spent == 0                           # nothing was bought
+    assert "Load a kit" in job.error                # and it says what to do

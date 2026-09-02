@@ -167,6 +167,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         engine = None
     else:
         cfg, store, engine = open_studio(args.home)
+        # Backends are built lazily so a studio with no keys can still be
+        # OPENED and looked at -- see gen/registry.Router. On the command line
+        # there is nothing to look at: every command here either spends money or
+        # resumes something that did, so the routing is proven up front and the
+        # command refuses rather than leaving a failed job behind.
+        engine.providers.check_all()
 
     if args.cmd == "dashboard":
         from .dashboard import serve

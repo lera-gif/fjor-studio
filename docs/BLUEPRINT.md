@@ -719,6 +719,30 @@ a producer retyped some of it into a brief.
   extrapolation rather than client knowledge. Their mechanics and safety blocks
   are the parts to trust.
 
+### 3.5d A tool must open before it is configured
+
+A shipped zip, unpacked and asked what a fresh deploy sees, could not render its
+dashboard at all: backends were constructed when a studio was OPENED, so a
+machine with no keys threw before the page existed -- and the controls that LOAD
+the keys and set the delivery folder are both on that page. The first hour of
+every deployment would have been spent on a traceback.
+
+- **A key is needed to RUN a job, not to look at one.** Backends are built
+  lazily, on first use.
+- **The protection that eagerness gave is kept, at the same moment.** Building
+  early was what guaranteed a missing key surfaced before money was spent, so
+  `check_all()` does it at INTAKE, beside the delivery-root check. Same
+  guarantee, without holding the whole tool hostage to it.
+- **Laziness is scoped to where there is something to look at.** The DASHBOARD
+  opens with no keys; the CLI proves its routing up front, because every command
+  it offers either spends money or resumes something that did, and a job created
+  only to fail is litter.
+- **Configuration a deployment needs is a CONTROL, not an error message.** No
+  delivery root is a setting at the top of the page with a live preview of where
+  finals will land -- not a refusal three clicks later naming a YAML file. The
+  refusal stays underneath it, at intake, because a run that discovers it at the
+  end has already been paid for.
+
 ## 4. Module map
 
 ```
@@ -760,7 +784,7 @@ fjor_studio/
   cli.py               new / run / approve / revise / retry / status / config
 ```
 
-549 tests, all of which execute the code rather than inspecting it.
+551 tests, all of which execute the code rather than inspecting it.
 
 ---
 

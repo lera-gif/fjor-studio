@@ -53,19 +53,56 @@ class Router(Backend):
 
     name = "router"
 
-    def __init__(self, routes: Dict[str, Backend]):
-        self.routes = routes
+    def __init__(self, specs: Dict[str, str], auth: Optional[Dict] = None):
+        # LAZY. A key is needed to RUN a job, not to look at one -- and building
+        # eagerly meant a studio with no keys could not be opened at all, so on
+        # a fresh deploy the dashboard would not render, and the controls that
+        # LOAD the keys and set the delivery folder were unreachable. The
+        # protection that construction gave is not lost: `check_all` does it at
+        # INTAKE, before anything is bought. Found by unpacking a shipped zip.
+        self.specs = dict(specs)
+        self._auth = dict(auth or {})
+        self._built: Dict[str, Backend] = {}
+
+    @property
+    def routes(self) -> Dict[str, Backend]:
+        """Every routed backend, constructed. Kept for callers that want them
+        all; prefer `backend_for`, which builds only what it needs."""
+        return {kind: self.backend_for(kind) for kind in self.specs}
 
     def capabilities(self) -> set:
-        return set(self.routes)
+        return set(self.specs)
 
     def backend_for(self, kind: str) -> Backend:
-        b = self.routes.get(kind)
-        if b is None:
+        name = self.specs.get(kind)
+        if name is None:
             raise GenError(
                 f"nothing is routed to '{kind}'. Set providers.{kind} in the "
                 f"config, or stop asking for it.")
-        return b
+        if name not in self._built:
+            if name not in _BUILDERS:
+                raise GenError(
+                    f"providers.{kind}: backend '{name}' is declared but not "
+                    f"yet implemented (implemented: "
+                    f"{', '.join(implemented()) or 'none'})")
+            backend = _BUILDERS[name](self._auth.get(name) or {})
+            # CAPABILITIES is the DECLARED map, checked before construction.
+            # This checks what the backend actually IMPLEMENTS, which can lag
+            # behind -- routing `image` to a backend whose image support is not
+            # written would otherwise pass config validation and fail mid-run.
+            if kind not in backend.capabilities():
+                raise GenError(
+                    f"providers.{kind}: backend '{name}' declares '{kind}' but "
+                    f"its implementation does not serve it yet (it does: "
+                    f"{', '.join(sorted(backend.capabilities()))})")
+            self._built[name] = backend
+        return self._built[name]
+
+    def check_all(self) -> None:
+        """Construct every routed backend, so a missing key or an unimplemented
+        capability is found HERE rather than mid-run. Called at intake."""
+        for kind in self.specs:
+            self.backend_for(kind)
 
     def submit(self, kind, model, prompt, params=None, medias=None) -> GenResult:
         return self.backend_for(kind).submit(kind, model, prompt, params, medias)
@@ -104,25 +141,4 @@ def build(routing: Dict[str, str], auth: Optional[Dict[str, Any]] = None,
     merged = {k: v for k, v in merged.items() if v is not None}
     validate_routing(merged)
 
-    built: Dict[str, Backend] = {}
-    routes: Dict[str, Backend] = {}
-    for kind, name in merged.items():
-        if name not in _BUILDERS:
-            raise GenError(
-                f"providers.{kind}: backend '{name}' is declared but not yet "
-                f"implemented (implemented: {', '.join(implemented()) or 'none'})")
-        if name not in built:
-            built[name] = _BUILDERS[name](auth.get(name) or {})
-        backend = built[name]
-        # CAPABILITIES is the DECLARED map, used to validate config before
-        # anything is constructed. This checks what the backend actually
-        # implements, which can lag behind -- routing `image` to a backend whose
-        # image support is not written yet would otherwise pass config
-        # validation and fail mid-run, after earlier stages had been paid for.
-        if kind not in backend.capabilities():
-            raise GenError(
-                f"providers.{kind}: backend '{name}' declares '{kind}' but its "
-                f"implementation does not serve it yet "
-                f"(it does: {', '.join(sorted(backend.capabilities()))})")
-        routes[kind] = backend
-    return Router(routes)
+    return Router(merged, auth)

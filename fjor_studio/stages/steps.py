@@ -119,6 +119,23 @@ def _run_media_qa(ctx: StageContext, scene, kind: str,
 # ----------------------------------------------------------------- stages ---
 
 
+def _check_providers(ctx: StageContext) -> None:
+    """Build every routed backend now, before anything is bought.
+
+    Backends are constructed LAZILY so that a studio with no keys can still be
+    opened and looked at -- otherwise the dashboard cannot render on a fresh
+    deploy, and the controls that load the keys are unreachable. That laziness
+    would push a missing key to the middle of a paid run, so it is spent here
+    instead: the same guarantee, at the same moment, without holding the whole
+    tool hostage to it."""
+    try:
+        ctx.providers.check_all()
+    except GenError as exc:
+        raise GenError(
+            f"{exc}. Load a kit at the top of the dashboard, or fill in "
+            f"config/auth.yaml. This is checked before anything is bought.")
+
+
 def _check_delivery_root(ctx: StageContext) -> None:
     """Fail at INTAKE if there is nowhere to deliver to.
 
@@ -167,6 +184,7 @@ def _check_subtitle_prerequisites(ctx: StageContext) -> None:
 def intake(ctx: StageContext) -> None:
     """Take the reference video into the job so later stages never depend on a
     path outside it."""
+    _check_providers(ctx)
     _check_delivery_root(ctx)
     _check_subtitle_prerequisites(ctx)
     if banner_steps.is_banner(ctx.job):

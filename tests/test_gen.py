@@ -27,7 +27,7 @@ def test_routing_accepts_the_colleagues_real_matrix():
 
 def test_declared_but_unimplemented_backend_fails_loudly():
     with pytest.raises(GenError, match="declared but not yet implemented"):
-        build({"text": "fal"})
+        build({"text": "fal"}).check_all()
 
 
 def test_a_backend_that_declares_more_than_it_implements_is_caught():
@@ -35,8 +35,11 @@ def test_a_backend_that_declares_more_than_it_implements_is_caught():
     it really does. Routing to the gap would pass config validation and fail
     mid-run, after earlier stages had been paid for."""
     assert "image" in CAPABILITIES["gemini"]        # declared
+    router = build({"image": "gemini"}, auth={"gemini": {"api_key": "x"}})
+    # backends are built lazily, so `build` no longer raises -- `check_all`
+    # does, and intake calls it before anything is bought
     with pytest.raises(GenError, match="does not serve it yet"):
-        build({"image": "gemini"}, auth={"gemini": {"api_key": "x"}})
+        router.check_all()
 
 
 def test_gemini_serves_the_kinds_it_is_routed_to():
