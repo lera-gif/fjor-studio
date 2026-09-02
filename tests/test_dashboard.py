@@ -1318,3 +1318,106 @@ def test_the_page_offers_it_and_says_what_it_costs():
     from fjor_studio.dashboard.page import PAGE
     for needle in ("Delete…", "deleteJob()", "free its id", "recoverable"):
         assert needle in PAGE, needle
+
+
+# -- dubbing -----------------------------------------------------------------
+#
+# The source is an UPLOAD: the owner's own creative, produced elsewhere. So the
+# band's position cannot be computed and the producer sets it, which makes the
+# preview -- not the dub -- the thing that has to be right.
+
+def _upload_video(base, tmp_path, name="cut.mp4"):
+    """A REAL video: the endpoint probes what it is given, and a stub file is
+    rejected there -- correctly, but it would test nothing here."""
+    from conftest import a_finished_cut
+    src = a_finished_cut(Path(tmp_path) / "arrived.mp4")
+    req = urllib.request.Request(
+        base + "/api/uploads", data=src.read_bytes(),
+        headers={"X-Filename": name, "Content-Type": "application/octet-stream"},
+        method="POST")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode())
+
+
+def test_the_band_can_be_previewed_before_anything_is_bought(live, tmp_path):
+    """A still costs nothing and a dub does not, so the producer sees where the
+    band lands first. This is what replaces their mouse."""
+    base, *_ = live
+    up = _upload_video(base, tmp_path)
+    assert up["token"]
+    status, got = post(base + "/api/dub/preview",
+                       {"token": up["token"], "y_pct": 88, "h_pct": 12})
+    assert status == 200
+    assert got["band"]["BH"] > 0
+    assert got["forecast"]["usd"] >= 0
+    # and the still is actually served
+    with urllib.request.urlopen(base + got["url"].split("?")[0], timeout=10) as r:
+        assert r.status == 200 and r.headers["Content-Type"] == "image/png"
+        assert len(r.read()) > 0
+
+
+def test_moving_the_band_moves_it(live, tmp_path):
+    base, *_ = live
+    up = _upload_video(base, tmp_path)
+    _s, low = post(base + "/api/dub/preview", {"token": up["token"], "y_pct": 40})
+    _s, high = post(base + "/api/dub/preview", {"token": up["token"], "y_pct": 88})
+    assert high["band"]["BY"] > low["band"]["BY"]
+
+
+def test_the_default_band_is_theirs(live, tmp_path):
+    """78% down, 15% tall. Not ours to tune -- it is what has been shipping."""
+    base, *_ = live
+    up = _upload_video(base, tmp_path)
+    _s, got = post(base + "/api/dub/preview", {"token": up["token"]})
+    centre = got["band"]["BY"] + got["band"]["BH"] / 2
+    assert abs(100 * centre / got["height"] - 78) < 2
+
+
+def test_an_unknown_language_is_refused_before_the_money(live, tmp_path):
+    base, *_ = live
+    up = _upload_video(base, tmp_path)
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        post(base + "/api/dub", {"token": up["token"], "lang": "xx"})
+    assert exc.value.code == 400
+
+
+def test_dubbing_a_dub_is_refused_before_the_money(live, tmp_path):
+    """The band would be covering subtitles that are already a translation."""
+    base, *_ = live
+    up = _upload_video(
+        base, tmp_path,
+        "n-COR286_ch-fb_t-video_c-easy_pr-pl_ds-tool_w-34_l-es_s-1080x1350.mp4")
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        post(base + "/api/dub", {"token": up["token"], "lang": "pt"})
+    assert exc.value.code == 400
+
+
+def test_a_dub_without_a_key_says_so_rather_than_failing_mid_run(live, tmp_path):
+    base, studio, *_ = live
+    cfg, _s, _e = studio.open()
+    cfg.auth = {}
+    up = _upload_video(base, tmp_path)
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        post(base + "/api/dub", {"token": up["token"], "lang": "es"})
+    assert exc.value.code == 400
+
+
+@pytest.mark.parametrize("evil", ["../../config/auth.yaml", "..%2f..%2fauth.yaml"])
+def test_dub_media_refuses_to_leave_its_directory(live, tmp_path, evil):
+    base, *_ = live
+    up = _upload_video(base, tmp_path)
+    post(base + "/api/dub/preview", {"token": up["token"]})
+    try:
+        with urllib.request.urlopen(
+                f"{base}/dubmedia/{up['token']}/{evil}", timeout=10) as r:
+            body = r.read()
+        assert b"api_key" not in body
+    except urllib.error.HTTPError as exc:
+        assert exc.code in (400, 403, 404, 500)
+
+
+def test_a_bad_token_never_reaches_the_filesystem(live):
+    base, studio, *_ = live
+    for bad in ("..", "a/b", "x" * 80, ""):
+        with pytest.raises(ValueError):
+            studio._dub_dir(bad)

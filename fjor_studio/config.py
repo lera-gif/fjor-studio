@@ -54,7 +54,7 @@ DEFAULT_DELIVERY: Dict[str, Any] = {
     "trash_subfolder": "_to_delete",
     "naming": {"channel": "fb", "type": "video", "source": "nano",
                "default_producer": "lp",
-               "producers": ["lp", "ts", "am", "ag", "kk"]},
+               "producers": ["lp", "ts", "am", "ag", "kk", "pl"]},
     "sizes": {"9:16": [1080, 1920], "4:5": [1080, 1350]},
     "export": {"crf": 21, "preset": "veryfast"},
 }

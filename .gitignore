@@ -20,3 +20,7 @@ assets/demos/*.mp4
 
 # dropped reference videos, staged before a job copies them into ref/
 uploads/
+
+# band previews and dubbed cuts -- paid output and working stills, same rule
+# as jobs/: media never goes in the repo
+dubs/

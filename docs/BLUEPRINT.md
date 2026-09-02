@@ -470,6 +470,28 @@ rather than a setting.
   delivered plate was produced afterwards, so it reported damage already
   repaired and had never seen what gets animated. Rule 4, a fifth time.
 
+### 3.4k A voice that is absent looks like nothing at all
+
+Their v4 note on the voice is one sentence and every clause of it is a scar:
+"prepared right after QA rather than at the end, paid once per text, never
+silently absent." Each gets its own mechanism.
+
+- **Never silently absent is the important one.** A shot with an external voice
+  is generated SILENT on purpose, so a missing track produces a clip that looks
+  exactly like a correct one -- and the ad ships mute. The backend refuses an
+  empty response, and the STAGE independently checks the file that landed,
+  because a backend we did not write is not a promise we can make.
+- **A refusal must not be written to disk as audio.** The API answers JSON when
+  it refuses and audio when it succeeds; without checking the content type an
+  error message becomes a track that plays as silence.
+- **Paid once per text**, keyed on the line and the voice: two shots with the
+  same words are one recording, and a revision or a derived job would otherwise
+  buy it again.
+- **A name is not an id.** Gemini takes a prebuilt voice NAME, ElevenLabs takes
+  an ID, and a name in that field is a refusal after the run has started.
+  `fjor-studio voices` lists the real ones rather than sending a producer to a
+  web dashboard to copy one.
+
 ### 3.5c A stop must leave the producer somewhere they can decide
 
 AW024 failed at preflight on three blocking clip verdicts, and its own error
@@ -793,6 +815,7 @@ fjor_studio/
   qa/policy.py         speech-only guard, regeneration policy
   gen/kie.py           images + video; the per-model reference-field table
   gen/gemini.py        analysis, prompt writing, media QA, TTS
+  gen/elevenlabs.py    speech, and the three rules their note names
   assemble.py          ffmpeg: normalise, concat, packshot, subtitles, overlays
   subtitles.py         transcribe, repair, ASS, burn
   dashboard/server.py  stdlib HTTP: state, actions, media
@@ -816,7 +839,7 @@ fjor_studio/
   cli.py               new / run / approve / revise / retry / status / config
 ```
 
-563 tests, all of which execute the code rather than inspecting it.
+582 tests, all of which execute the code rather than inspecting it.
 
 ---
 

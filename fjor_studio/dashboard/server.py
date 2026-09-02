@@ -16,17 +16,22 @@ import os
 import posixpath
 import re
 import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..app import new_job, open_studio
+from ..engine.job import utcnow
 from ..assemble import list_music, list_packshots
 from .. import kit as kit_mod
 from ..kit import KitError
+from ..gen.base import GenError
 from ..qa import blocking_scenes
 from ..refkind import KINDS as REF_KINDS
+from ..stages.dub_steps import LANGUAGES as DUB_LANGUAGES
+from .. import dubband
 from ..subtitles import COLOURS as SUB_COLOURS
 from ..config import UnknownVertical
 from ..derive import FROM_STAGES, DeriveError, derive
@@ -86,6 +91,7 @@ class Studio:
         self.home = Path(home) if home else None
         self._lock = threading.Lock()
         self.worker = Worker(self._run_action)
+        self._dub_lock = threading.Lock()
 
     def open(self):
         # rebuilt per request: config, routing and the asset library are all
@@ -97,6 +103,10 @@ class Studio:
     def _run_action(self, job_id: str, action: str, payload: Dict[str, Any]) -> None:
         with self._lock:
             _cfg, store, engine = self.open()
+            if action == "dub_upload":
+                # the "job_id" here is the upload's token: there is no job. The
+                # source was produced elsewhere and dropped on the dashboard.
+                return self._dub_upload(job_id, payload)
             job = store.load(job_id)
             if action == "run":
                 engine.run(job)
@@ -164,6 +174,11 @@ class Studio:
                              if isinstance(v, dict)
                              and str(v.get("api_key") or "").strip())},
                 "ref_kinds": sorted(REF_KINDS),
+                "dub_languages": sorted(DUB_LANGUAGES.items()),
+                "dub_defaults": {"y_pct": dubband.BAND_Y_PCT,
+                                 "h_pct": dubband.BAND_H_PCT,
+                                 "feather": dubband.FEATHER_DEFAULT,
+                                 "strength": dubband.STRENGTH_DEFAULT},
                 "ref_kind_default": str(((cfg.pipeline or {}).get("analysis")
                                          or {}).get("ref_kind", "ugc")),
                 "music": list_music(assets),
@@ -502,6 +517,9 @@ class Studio:
                     f"stream -- the file is named like one but is not one")
             out = {
                 "path": str(dest), "name": safe, "size": written, "kind": kind,
+                # the upload's own directory name: how a dub refers back to it
+                # without the browser ever handling a filesystem path
+                "token": dest_dir.name,
                 "width": int(video.get("width") or 0),
                 "height": int(video.get("height") or 0),
             }
@@ -547,6 +565,172 @@ class Studio:
                      recast=bool(form.get("recast")),
                      cast_descriptions=form.get("cast_descriptions") or None)
         return job.id
+
+    # -- dubbing -------------------------------------------------------------
+    #
+    # The source is an UPLOAD -- the owner's own creative, produced elsewhere.
+    # So the old burnt-in subtitles are pixels of unknown position, and where
+    # the band goes is the producer's call. Their tool has a mouse for it; this
+    # has a still frame, which is the part that actually matters.
+
+    def _dub_dir(self, token: str) -> Path:
+        cfg, _store, _engine = self.open()
+        if not re.fullmatch(r"[A-Za-z0-9]{4,40}", token or ""):
+            raise ValueError("bad dub token")
+        return cfg.home / "dubs" / token
+
+    def _dub_source(self, token: str) -> Path:
+        cfg, _store, _engine = self.open()
+        if not re.fullmatch(r"[A-Za-z0-9]{4,40}", token or ""):
+            raise ValueError("bad upload token")
+        up = cfg.home / "uploads" / token
+        videos = [f for f in sorted(up.glob("*"))
+                  if f.is_file() and f.suffix.lower() in VIDEO_SUFFIXES]
+        if not videos:
+            raise FileNotFoundError(f"no uploaded video under {token}")
+        return videos[0]
+
+    def _band_from(self, payload: Dict[str, Any], width: int,
+                   height: int) -> Dict[str, Any]:
+        from ..stages import dub_steps
+        from .. import dubband
+        def num(key, default):
+            try:
+                return float(payload.get(key, default))
+            except (TypeError, ValueError):
+                return default
+        return dub_steps.band(
+            width, height, y_pct=num("y_pct", dubband.BAND_Y_PCT),
+            h_pct=num("h_pct", dubband.BAND_H_PCT),
+            feather=num("feather", dubband.FEATHER_DEFAULT),
+            strength=num("strength", dubband.STRENGTH_DEFAULT))
+
+    def dub_preview(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """One still with the band on it. Costs nothing; a dub does not."""
+        from ..assemble import ffmpeg_with_libass, probe
+        from ..stages import dub_steps
+        token = str(payload.get("token") or "")
+        source = self._dub_source(token)
+        info = probe(source)
+        stream = next((st for st in info.get("streams") or []
+                       if st.get("codec_type") == "video"), {})
+        width, height = int(stream.get("width") or 0), int(stream.get("height") or 0)
+        if not width or not height:
+            raise ValueError(f"{source.name} has no readable video size")
+        geom = self._band_from(payload, width, height)
+        try:
+            at = max(0.0, float(payload.get("at", 0)))
+        except (TypeError, ValueError):
+            at = 0.0
+        out = self._dub_dir(token)
+        dest = dub_steps.preview(source, out / "preview.png", geom,
+                                 ffmpeg_with_libass(), at_seconds=at)
+        duration = round(float((info.get("format") or {}).get("duration") or 0), 2)
+        return {"token": token, "name": source.name, "width": width,
+                "height": height, "duration_s": duration,
+                "band": {k: geom[k] for k in ("BY", "BH", "r", "F")},
+                "url": f"/dubmedia/{token}/{dest.name}?t={int(time.time())}",
+                "forecast": dub_steps.forecast(source)}
+
+    def dub_start(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Check everything checkable BEFORE the money: the file, the language,
+        the key, and that this is not already a dub."""
+        from ..stages import dub_steps
+        token = str(payload.get("token") or "")
+        source = self._dub_source(token)
+        lang = str(payload.get("lang") or "").strip().lower()
+        dub_steps.language_name(lang)
+        dub_steps.dubbed_name(source.name, lang)     # refuses a dub of a dub
+        cfg, _store, _engine = self.open()
+        if not ((cfg.auth or {}).get("elevenlabs") or {}).get("api_key"):
+            raise ValueError(
+                "dubbing needs an ElevenLabs key -- upload a kit above, or set "
+                "elevenlabs.api_key in config/auth.yaml")
+        if self.worker.queued_for(token):
+            raise ValueError(f"{source.name} is already being dubbed")
+        self.worker.submit(token, "dub_upload", dict(payload, lang=lang))
+        return {"token": token, "lang": lang, "queued": True,
+                "forecast": dub_steps.forecast(source)}
+
+    def _dub_upload(self, token: str, payload: Dict[str, Any]) -> None:
+        from ..assemble import probe
+        from ..stages import dub_steps
+        cfg, _store, _engine = self.open()
+        source = self._dub_source(token)
+        lang = str(payload.get("lang") or "").strip().lower()
+        out = self._dub_dir(token) / lang
+        state = self._dub_dir(token) / "state.json"
+
+        info = probe(source)
+        stream = next((st for st in info.get("streams") or []
+                       if st.get("codec_type") == "video"), {})
+        geom = self._band_from(payload, int(stream.get("width") or 1080),
+                               int(stream.get("height") or 1920))
+        key = ((cfg.auth or {}).get("elevenlabs") or {}).get("api_key", "")
+
+        def note(kind, msg, **data):
+            """The dubbing id, on disk, the moment it is accepted -- it is paid
+            from that instant and an id nobody wrote down cannot be collected."""
+            self._dub_write(state, lang, {"stage": msg, **data})
+
+        self._dub_write(state, lang, {"stage": "starting", "source": source.name})
+        try:
+            got = dub_steps.dub_video(source, out, lang, key, geom=geom,
+                                      on_progress=lambda m: self._dub_write(
+                                          state, lang, {"stage": m}),
+                                      record=note)
+        except Exception as exc:  # noqa: BLE001
+            self._dub_write(state, lang,
+                            {"stage": "failed", "error": f"{type(exc).__name__}: {exc}"})
+            raise
+        named = got["video"].parent / dub_steps.dubbed_name(source.name, lang)
+        got["video"].replace(named)
+        self._dub_write(state, lang, {
+            "stage": "done", "file": named.name, "words": got["words"],
+            "subtitles": got["subtitles"], "note": got["note"],
+            "dubbing_id": got["dubbing_id"], "source": source.name,
+            "url": f"/dubmedia/{token}/{lang}/{named.name}"})
+
+    def _dub_write(self, state_path: Path, lang: str,
+                   patch: Dict[str, Any]) -> None:
+        with self._dub_lock:
+            try:
+                data = json.loads(state_path.read_text())
+            except Exception:  # noqa: BLE001
+                data = {}
+            entry = data.setdefault(lang, {})
+            entry.update(patch)
+            entry["at"] = utcnow()
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps(data, indent=2))
+
+    def dubs(self) -> List[Dict[str, Any]]:
+        """Every dub this studio has bought, so a producer can find one back."""
+        cfg, _store, _engine = self.open()
+        root = cfg.home / "dubs"
+        out: List[Dict[str, Any]] = []
+        if not root.is_dir():
+            return out
+        for d in sorted(root.iterdir(), reverse=True):
+            try:
+                data = json.loads((d / "state.json").read_text())
+            except Exception:  # noqa: BLE001
+                continue
+            for lang, entry in sorted(data.items()):
+                out.append(dict(entry, token=d.name, lang=lang,
+                                busy=self.worker.queued_for(d.name)))
+        return out
+
+    def dub_media(self, token: str, rel: str) -> Path:
+        if not SAFE_MEDIA.match(rel) or ".." in rel:
+            raise ValueError("bad media path")
+        root = self._dub_dir(token).resolve()
+        path = (root / rel).resolve()
+        if not str(path).startswith(str(root) + os.sep):
+            raise ValueError("path escapes the dub directory")
+        if not path.is_file():
+            raise FileNotFoundError(rel)
+        return path
 
     def media_path(self, job_id: str, rel: str) -> Path:
         _cfg, store, _engine = self.open()
@@ -697,14 +881,34 @@ def make_handler(studio: Studio, token: str = ""):
                 m = re.match(r"^/api/jobs/([A-Za-z0-9]+)$", path)
                 if m:
                     return self._json(studio.detail(m.group(1)))
+                if path == "/api/dubs":
+                    return self._json({"dubs": studio.dubs()})
                 m = re.match(r"^/media/([A-Za-z0-9]+)/(.+)$", path)
                 if m:
                     return self._serve_media(m.group(1), m.group(2))
+                m = re.match(r"^/dubmedia/([A-Za-z0-9]+)/(.+)$", path)
+                if m:
+                    return self._serve_file(
+                        studio.dub_media(m.group(1), m.group(2)))
                 self._json({"error": "not found"}, 404)
             except FileNotFoundError as exc:
                 self._json({"error": str(exc)}, 404)
             except Exception as exc:  # noqa: BLE001
                 self._json({"error": f"{type(exc).__name__}: {exc}"}, 500)
+
+        def _serve_file(self, path: Path) -> None:
+            """A still or a finished dub. No ranges: a PNG does not need them,
+            and a dubbed cut is downloaded rather than scrubbed."""
+            body = path.read_bytes()
+            ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
 
         def _serve_media(self, job_id: str, rel: str) -> None:
             """Serves byte ranges, which is not optional for video.
@@ -789,6 +993,10 @@ def make_handler(studio: Studio, token: str = ""):
                     # says only which providers arrived, never a value.
                     return self._json(
                         {"providers": kit_mod.use(kit_mod.parse(payload))})
+                if path == "/api/dub/preview":
+                    return self._json(studio.dub_preview(payload))
+                if path == "/api/dub":
+                    return self._json(studio.dub_start(payload))
                 if path == "/api/uploads":
                     return self._json(studio.receive_upload(
                         self.headers.get("X-Filename", ""), self.rfile,
@@ -819,8 +1027,10 @@ def make_handler(studio: Studio, token: str = ""):
                 self._json({"error": "not found"}, 404)
             except UnknownVertical as exc:
                 self._json({"error": str(exc)}, 400)
-            except (TransitionError, DeriveError, KitError, ValueError,
-                    KeyError) as exc:
+            except (TransitionError, DeriveError, KitError, GenError,
+                    ValueError, KeyError) as exc:
+                # a refusal is the answer, not a crash: the page shows it, and
+                # "Internal Server Error" would tell the producer nothing
                 self._json({"error": f"{type(exc).__name__}: {exc}"}, 400)
             except Exception as exc:  # noqa: BLE001
                 self._json({"error": f"{type(exc).__name__}: {exc}"}, 500)

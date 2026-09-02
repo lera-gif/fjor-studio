@@ -159,3 +159,22 @@ def banner_answers(**over):
     }
     answers.update(over)
     return json.dumps({k: v for k, v in answers.items() if v is not None})
+
+
+def a_finished_cut(path, w=1080, h=1920, seconds=1, subs_at=0.78):
+    """A creative as it would arrive: produced elsewhere, subtitles already
+    burned in, and nothing about where they sit recorded anywhere."""
+    import subprocess
+    from fjor_studio.assemble import ffmpeg_with_libass
+    font = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Inter-Bold.ttf"
+    subprocess.run(
+        [ffmpeg_with_libass(), "-y", "-v", "error", "-f", "lavfi",
+         "-i", f"gradients=size={w}x{h}:rate=25:duration={seconds}"
+               f":c0=0x203040:c1=0xa06040",
+         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-shortest", "-vf",
+         f"drawtext=fontfile={font}:text='OLD BURNT IN LINE':fontcolor=white:"
+         f"fontsize=52:borderw=3:bordercolor=black:x=(w-tw)/2:"
+         f"y=h*{subs_at}-26",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(path)],
+        check=True, capture_output=True)
+    return path

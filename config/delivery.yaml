@@ -19,17 +19,23 @@ week_folder: "{week} week"          # e.g. "34 week" -- note the space
 trash_subfolder: "_to_delete"
 
 naming:
-  template: "n-{id}_ch-{channel}_t-{type}_c-{concept}_pr-{producer}_ds-{source}_w-{week}_s-{w}x{h}.{ext}"
+  # DOCUMENTATION, not the authority: `naming.py` owns the real template and
+  # verifies every name it builds against its own reader. `_l-<code>` appears
+  # only on a dubbed cut and sits between the week and the size, so the size
+  # stays last -- confirmed against a live file, n-COR286_..._w-34_l-es_s-...
+  template: "n-{id}_ch-{channel}_t-{type}_c-{concept}_pr-{producer}_ds-{source}_w-{week}[_l-{lang}]_s-{w}x{h}.{ext}"
   channel: fb
   type: video
   # `ds-nano` = any AI-generated creative, whichever model made it. The client
   # calls all of it nano. `st`/`ns` are the template/seedance pipelines, `lp` is
-  # in-house Figma.
+  # in-house Figma, and `tool` is the colleague's pipeline -- all of them are in
+  # use in the live tree. Free text, like the producer token: this is the
+  # default, not a whitelist.
   source: nano
   # `pr-` is the PRODUCER'S INITIALS. The vendored naming.md calls it "funnel";
   # that reading is wrong and was corrected by the owner on 2026-08-03. Free
   # text -- the list below is the known values, not a whitelist.
-  producers: [lp, ts, am, ag, kk]
+  producers: [lp, ts, am, ag, kk, pl]
   default_producer: lp
 
 # Ship both, every time.

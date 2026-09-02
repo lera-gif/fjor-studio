@@ -1183,12 +1183,43 @@ def voiceovers(ctx: StageContext) -> None:
             f"routed: {exc}")
     model = ctx.config.model_for("speech")
     voice_cfg = ((ctx.config.pipeline or {}).get("voice") or {})
+    # A NAME for Gemini's prebuilt voices, an ID for ElevenLabs. Kept as two
+    # keys rather than one clever one: an id in a name field is a bad take, and
+    # a name in an id field is a refusal, and neither is worth guessing about.
+    voice = str(voice_cfg.get("voice_id") or voice_cfg.get("name") or "Kore")
+    spoken: Dict[str, str] = {}          # text+voice -> track already bought
     for scene in pending:
+        # PAID ONCE PER TEXT. Two shots with the same line are one recording,
+        # and a derived job or a revision would otherwise buy it again. Their
+        # note names this among three things the voice must get right.
+        key = f"{voice}\x00{scene.line.strip()}"
+        if key in spoken:
+            scene.vo_track = spoken[key]
+            ctx.job.put_scene(scene)
+            ctx.job.add_event(
+                "vo_reused",
+                f"scene {scene.idx}: the same line as an earlier shot, spoken "
+                f"once and used twice", scene=scene.idx)
+            ctx.store.save(ctx.job)
+            continue
         out = ctx.dir("audio") / f"scene_{scene.idx:02d}_vo.wav"
         result = backend.generate("speech", model, scene.line,
-                                  params={"out_path": str(out),
-                                          "voice": voice_cfg.get("name", "Kore")})
-        scene.vo_track = f"audio/{out.name}"
+                                  params={"out_path": str(out), "voice": voice})
+        # NEVER SILENTLY ABSENT. The clip is silent by design, so a missing
+        # track looks like nothing at all downstream and the ad ships with no
+        # voice. The backend raises rather than writing an empty file; this
+        # checks the file that arrived, because a backend we did not write is
+        # not a promise we can make.
+        made = Path(result.files[0]) if result.files else None
+        if made is None or not made.exists() or made.stat().st_size == 0:
+            raise GenError(
+                f"scene {scene.idx}: the voiceover came back empty, and this "
+                f"shot is generated SILENT -- shipping it now would be an ad "
+                f"with no voice and nothing on screen to show it. Retry, or "
+                f"give the shot to the video model by setting voice: "
+                f"on_camera.")
+        scene.vo_track = f"audio/{made.name}"
+        spoken[key] = scene.vo_track
         ctx.job.put_scene(scene)
         ctx.job.add_artifact("audio", scene.vo_track)
         if result.credits:

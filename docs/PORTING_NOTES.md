@@ -260,10 +260,38 @@ All of it is on branch **`tool-v4-port`**. `main` is untouched. The tag
    job it can still do honestly. A brief edit is refused out loud in this mode,
    because it would be painted and then overwritten.
 
-2. **ElevenLabs voice.** Not implemented at all — declared and routable only.
-   Prepared right after QA rather than at the end, paid once per text, never
-   silently absent.
-3. **Batch dubbing.** A bulk tool, not part of making a creative. Separable.
+2. **ElevenLabs voice.** DONE — `gen/elevenlabs.py`. All three clauses of their
+   note are mechanised: paid once per text (keyed on line + voice, reused across
+   shots), never silently absent (the backend refuses an empty response and the
+   stage re-checks the file that landed), and prepared before assembly. Plus two
+   of our own: a refusal is never written to disk as audio (the API answers JSON
+   when it refuses), and `fjor-studio voices` lists real voice ids, because
+   ElevenLabs takes an ID where Gemini takes a NAME. Untested against the live
+   API -- no voice id has been configured yet.
+3. **Dubbing.** DONE, and ported rather than redesigned.
+
+   The source is an UPLOAD: the owner's own creative, produced elsewhere. An
+   earlier draft here dubbed the CLIPS of an in-tool job and re-assembled, which
+   avoids the blur band entirely because our clips never carry subtitles. It was
+   wrong twice over -- the videos are not made here, and even when they are, a
+   cut re-assembled from separately dubbed clips is not the same cut: the mix,
+   the bed and every transition get rebuilt, and any of them can drift from the
+   English original that was approved. Dubbing the finished file changes the
+   speech and nothing else.
+
+   Their geometry is in `dubband.py` and every constant in it is a paid-for fix:
+   the blur radius is clamped against the CHROMA plane (in yuv420p the chroma
+   planes are half size and take the same radius, and overrunning them killed
+   ffmpeg mid-dub), the chroma radius is set explicitly to half, the blurred
+   region carries a +/-r margin because boxblur repeats pixels at its edge, and
+   every dimension is even. The `geq` alpha ramp is the one part that is not a
+   port -- they draw the gradient as a PNG in a canvas -- so it is the part with
+   a test that actually runs ffmpeg and measures the edge energy left behind.
+
+   The one thing their producer supplies with a mouse is where the band goes.
+   There is no mouse here, so it is a number with their defaults (78% down, 15%
+   tall) and a still preview to check it against. Sight was always the point;
+   the drag was only how they got it.
 4. **Dashboard UI** for drivers, morph, the card and banner mode. DONE.
 
    - The New-job drop zone takes an image as well as a video and SAYS which

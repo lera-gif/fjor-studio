@@ -137,6 +137,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     dv.add_argument("--crossfade-s", type=float, default=None)
     dv.add_argument("--run", action="store_true")
 
+    sub.add_parser("voices", help="list the speech voices this key can use")
+
     d = sub.add_parser("delete", help="retire a job and free its creative id")
     d.add_argument("job_id")
 
@@ -170,7 +172,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # what a person runs while SETTING UP, before any key exists, and `config`
     # is the one that shows them what is still missing. Refusing to print the
     # configuration until the configuration is complete is a circle.
-    if args.cmd in ("config", "assets", "list", "dashboard"):
+    if args.cmd in ("config", "assets", "list", "dashboard", "voices"):
         cfg = config_mod.load(args.home)
         store = JobStore(cfg.jobs_dir)
         engine = None
@@ -268,6 +270,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             job = engine.run(job)
         _print_job(job, verbose=True)
         return 1 if job.state == "failed" else 0
+
+    if args.cmd == "voices":
+        # So a producer is TOLD the ids rather than sent to a web dashboard to
+        # copy one, which is where a wrong id comes from.
+        from .gen import ElevenLabsBackend
+        voices = ElevenLabsBackend((cfg.auth or {}).get("elevenlabs") or {}).voices()
+        for v in voices:
+            print(f"  {v['id']}  {v['name']}")
+        print(f"\nSet one as `voice.voice_id` in config/pipeline.yaml. "
+              f"{len(voices)} available.")
+        return 0
 
     if args.cmd == "delete":
         moved = store.delete(args.job_id)

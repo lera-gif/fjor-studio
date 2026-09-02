@@ -19,7 +19,13 @@ import re
 from typing import Any, Dict, Optional
 
 TEMPLATE = ("n-{id}_ch-{channel}_t-{type}_c-{concept}_pr-{producer}"
-            "_ds-{source}_w-{week}_s-{w}x{h}.{ext}")
+            "_ds-{source}_w-{week}{lang}_s-{w}x{h}.{ext}")
+
+# The language token, present ONLY on a dubbed cut. A creative in its original
+# language keeps the name it has always had, byte for byte -- hundreds of files
+# already carry it and a spreadsheet somewhere reads them. `_l-es` sits between
+# the week and the size, so the size stays where every reader expects it: last.
+LANG_TOKEN = "_l-{lang}"
 
 EXAMPLE = "n-LIPIL025_ch-fb_t-video_c-test_pr-lp_ds-nano_w-34_s-1080x1350"
 
@@ -31,6 +37,7 @@ FINAL_RE = re.compile(
     r"_pr-(?P<producer>[a-z0-9-]+)"
     r"_ds-(?P<source>[a-z0-9-]+)"
     r"_w-(?P<week>\d+)"
+    r"(?:_l-(?P<lang>[a-z]{2,3}))?"          # dubbed cuts only; absent = original
     r"_s-(?P<w>\d+)x(?P<h>\d+)"
     r"\.(?P<ext>[a-z0-9]+)$")
 
@@ -46,7 +53,8 @@ def slug(value: str) -> str:
 
 def build(job_id: str, concept: str, week, width: int, height: int,
           producer: str = "lp", channel: str = "fb", type_: str = "video",
-          source: str = "nano", ext: str = "mp4") -> str:
+          source: str = "nano", ext: str = "mp4",
+          lang: str = "") -> str:
     concept_s, producer_s = slug(concept), slug(producer)
     if not concept_s:
         raise ValueError("a final needs a concept token (the `c-` part)")
@@ -56,9 +64,15 @@ def build(job_id: str, concept: str, week, width: int, height: int,
         week_n = int(week)
     except (TypeError, ValueError):
         raise ValueError(f"week must be a number, got {week!r}")
+    lang_s = slug(lang)
+    if lang_s and not re.fullmatch(r"[a-z]{2,3}", lang_s):
+        raise ValueError(
+            f"'{lang}' is not a language code -- the token is two or three "
+            f"letters, as in `_l-es`")
     name = TEMPLATE.format(id=job_id, channel=slug(channel), type=slug(type_),
                            concept=concept_s, producer=producer_s,
                            source=slug(source), week=week_n,
+                           lang=LANG_TOKEN.format(lang=lang_s) if lang_s else "",
                            w=int(width), h=int(height), ext=ext)
     # build then verify: a token that would not read back is a bug here, not a
     # surprise three weeks later when someone greps the week folder

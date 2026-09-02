@@ -162,7 +162,8 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
 <div class="layout">
   <aside class="side">
     <div class="brand"><h1>FJOR Studio</h1>
-      <button id="newBtn" class="primary" style="padding:5px 11px">New</button></div>
+      <button id="newBtn" class="primary" style="padding:5px 11px">New</button>
+      <button id="dubBtn" style="padding:5px 11px;margin-left:6px">Dub</button></div>
 <div id="setupBar"></div>
 <div id="kitBar"></div>
 <input type="file" id="kitInput" accept="application/json,.json" style="display:none">
@@ -172,6 +173,53 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
   </aside>
   <main class="main" id="main"><div class="empty">Select a job, or create one.</div></main>
 </div>
+
+<dialog id="dubDlg" style="max-width:900px;max-height:92vh;overflow:auto">
+  <h3 style="margin:0 0 4px">Dub a finished cut</h3>
+  <div class="hint" style="margin-bottom:14px">The whole video is dubbed once,
+    the old burnt-in subtitles are covered with a blurred band, and new ones are
+    burned from the dub's own word timings.</div>
+  <div id="dubErr"></div>
+  <div class="drop" id="dubDrop">
+    <div class="big">Drop the video to dub</div>
+    <div class="hint">or click to choose &middot; the finished cut, as it shipped</div>
+  </div>
+  <input type="file" id="dubInput" accept="video/*" style="display:none">
+  <div id="dubBody" style="display:none;margin-top:14px">
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:18px">
+      <div>
+        <label>Language</label><select id="dubLang"></select>
+        <div style="margin-top:14px"><label>Band position
+          <span class="muted" id="dubYv"></span></label>
+          <input type="range" id="dubY" min="0" max="100" step="0.5" style="width:100%"></div>
+        <div><label>Band height <span class="muted" id="dubHv"></span></label>
+          <input type="range" id="dubH" min="2" max="40" step="0.5" style="width:100%"></div>
+        <div><label>Softness <span class="muted" id="dubFv"></span></label>
+          <input type="range" id="dubF" min="0" max="50" step="1" style="width:100%"></div>
+        <div><label>Strength <span class="muted" id="dubSv"></span></label>
+          <input type="range" id="dubS" min="10" max="100" step="1" style="width:100%"></div>
+        <div class="hint" style="margin-top:8px">Strength 100 clears a hard
+          white-on-dark subtitle that 80 can leave as a faint ghost.</div>
+        <div style="margin-top:12px"><label>Frame to check (s)</label>
+          <input type="number" id="dubAt" min="0" step="0.5" value="0"></div>
+      </div>
+      <div>
+        <div class="hint" style="margin-bottom:6px">Check the band actually covers
+          the old subtitles &mdash; this still costs nothing, the dub does.</div>
+        <img id="dubPv" style="width:100%;max-height:52vh;object-fit:contain;
+             border-radius:10px;border:1px solid var(--line);background:#000"
+             alt="band preview">
+        <div class="hint" id="dubMeta" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+      <div class="hint" id="dubCost"></div>
+      <div><button id="dubCancel">Close</button>
+        <button id="dubGo" class="primary">Dub</button></div>
+    </div>
+  </div>
+  <div id="dubList" style="margin-top:16px"></div>
+</dialog>
 
 <dialog id="newDlg"><form method="dialog" id="newForm">
   <h3 style="margin:0 0 16px">New job</h3>
@@ -1200,6 +1248,128 @@ function drvEngineNote(){
     : 'Seedance video reference: the shot keeps its planned length (4-15s) and may speak.';
 }
 $('#drvEngine').addEventListener('change',drvEngineNote);
+// -- dubbing -----------------------------------------------------------------
+// The source is produced elsewhere, so nothing here knows where the old
+// subtitles sit. Their tool has the producer drag a rectangle; this has the
+// same band with the same defaults, and a still frame to check it against.
+let DUB=null, DUBTIMER=null;
+
+function dubDefaults(){
+  const d=(STATE&&STATE.options&&STATE.options.dub_defaults)||{y_pct:78,h_pct:15,feather:35,strength:80};
+  $('#dubY').value=d.y_pct; $('#dubH').value=d.h_pct;
+  $('#dubF').value=d.feather; $('#dubS').value=d.strength;
+  const langs=(STATE&&STATE.options&&STATE.options.dub_languages)||[];
+  $('#dubLang').innerHTML=langs.map(([c,n])=>
+    `<option value="${esc(c)}">${esc(n)}</option>`).join('');
+}
+function dubLabels(){
+  $('#dubYv').textContent=(+$('#dubY').value).toFixed(1)+'%';
+  $('#dubHv').textContent=(+$('#dubH').value).toFixed(1)+'%';
+  $('#dubFv').textContent=$('#dubF').value;
+  $('#dubSv').textContent=$('#dubS').value
+    +(+$('#dubS').value>=100?' — clears a hard ghost':'');
+}
+function dubParams(){
+  return {token:DUB&&DUB.token, y_pct:+$('#dubY').value, h_pct:+$('#dubH').value,
+          feather:+$('#dubF').value, strength:+$('#dubS').value,
+          at:+($('#dubAt').value||0)};
+}
+async function dubPreview(){
+  if(!DUB) return;
+  dubLabels();
+  try{
+    const r=await api('/api/dub/preview',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(dubParams())});
+    $('#dubPv').src=r.url;
+    $('#dubMeta').textContent=`${r.name} · ${r.width}×${r.height} · ${r.duration_s}s`;
+    $('#dubCost').innerHTML='About <b>$'+r.forecast.usd.toFixed(2)+'</b> for '
+      +r.forecast.seconds+'s — '+esc(r.forecast.note);
+    $('#dubErr').innerHTML='';
+  }catch(e){ $('#dubErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+function dubPreviewSoon(){ clearTimeout(DUBTIMER); DUBTIMER=setTimeout(dubPreview,220); }
+
+function uploadDub(file){
+  if(!file) return;
+  const d=$('#dubDrop');
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST','/api/uploads');
+  xhr.setRequestHeader('X-Filename',file.name);
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.upload.onprogress=e=>{ if(e.lengthComputable)
+    d.innerHTML=`<div class="big">Uploading…</div><div class="hint">${Math.round(e.loaded/e.total*100)}%</div>`; };
+  xhr.onload=()=>{
+    let r={}; try{ r=JSON.parse(xhr.responseText); }catch(e){}
+    if(xhr.status>=400||r.error||r.kind!=='reference'){
+      DUB=null;
+      d.innerHTML='<div class="big">Drop the video to dub</div>'
+        +'<div class="hint">or click to choose</div>';
+      $('#dubErr').innerHTML=`<div class="err">${esc(r.error
+        ||(r.kind==='banner'?'that is an image — a dub needs a video':'upload failed'))}</div>`;
+      return;
+    }
+    DUB=r; d.classList.add('has');
+    d.innerHTML=`<div class="big">${esc(r.name)}</div>
+      <div class="hint">${r.duration_s}s &middot; ${r.width}&times;${r.height}</div>`;
+    $('#dubBody').style.display='';
+    $('#dubAt').max=Math.max(0,(r.duration_s||1)-0.1);
+    dubPreview();
+  };
+  xhr.onerror=()=>{ $('#dubErr').innerHTML='<div class="err">upload failed</div>'; };
+  xhr.send(file);
+}
+
+async function dubGo(){
+  if(!DUB) return;
+  const lang=$('#dubLang').value;
+  const name=$('#dubLang').selectedOptions[0].textContent;
+  if(!confirm(`Dub "${DUB.name}" into ${name}? This is paid, and it starts now.`))
+    return;
+  try{
+    await api('/api/dub',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign(dubParams(),{lang}))});
+    $('#dubErr').innerHTML='';
+    dubRefresh();
+  }catch(e){ $('#dubErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+
+async function dubRefresh(){
+  let dubs=[];
+  try{ dubs=(await api('/api/dubs')).dubs||[]; }catch(e){ return; }
+  if(!dubs.length){ $('#dubList').innerHTML=''; return; }
+  $('#dubList').innerHTML='<label>Dubs</label>'+dubs.map(d=>{
+    const bad=d.stage==='failed';
+    const done=d.stage==='done';
+    return `<div class="card" style="margin:6px 0;background:var(--panel2)">
+      <div style="display:flex;justify-content:space-between;gap:12px">
+        <div><b>${esc(d.file||d.source||d.token)}</b>
+          <span class="pill ${bad?'bad':done?'done':'gate'}">${esc(d.lang)}</span>
+          <div class="hint">${esc(bad?(d.error||'failed'):d.stage||'')}</div>
+          ${done&&!d.subtitles?`<div class="err" style="margin-top:6px">${esc(d.note)}</div>`:''}
+          ${done&&d.subtitles?`<div class="hint">${d.words} words of subtitles</div>`:''}
+        </div>
+        ${done?`<a href="${esc(d.url)}" download style="align-self:center">Download</a>`:''}
+      </div></div>`;
+  }).join('');
+}
+
+(function(){
+  const d=$('#dubDrop'), input=$('#dubInput');
+  d.onclick=()=>input.click();
+  input.onchange=()=>{ uploadDub(input.files[0]); input.value=''; };
+  ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('over');}));
+  d.addEventListener('drop',e=>uploadDub(e.dataTransfer.files[0]));
+  ['#dubY','#dubH','#dubF','#dubS'].forEach(id=>{
+    $(id).addEventListener('input',()=>{ dubLabels(); dubPreviewSoon(); }); });
+  $('#dubAt').addEventListener('change',dubPreviewSoon);
+  $('#dubGo').onclick=dubGo;
+  $('#dubCancel').onclick=()=>$('#dubDlg').close();
+  $('#dubBtn').onclick=()=>{ dubDefaults(); dubLabels(); dubRefresh();
+    $('#dubDlg').showModal(); };
+})();
+
 function uploadDriver(file){
   if(!file) return;
   const d=$('#drvDrop');

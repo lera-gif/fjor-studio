@@ -73,6 +73,29 @@ in), pick the music bed, set the subtitle colour and size or turn them off. Appl
 again. That is why the bed is no longer a question the brief asks: it is judged
 against the cut, not imagined before it.
 
+### Dubbing
+
+**Dub** takes a finished creative — one of yours, produced anywhere — and ships
+it in another language. This is a port of how the reference tool has done it for
+a long time, not a redesign of it:
+
+- the whole video is dubbed once, so the mix, the music and every transition
+  survive exactly as approved;
+- a blurred band covers the old burnt-in subtitles;
+- new subtitles are burned from the dub's own word timings.
+
+Because the video was produced elsewhere, nothing here knows where the old
+subtitles sit — so you place the band, starting from their defaults (78% down,
+15% tall). The still preview costs nothing and the dub does not, so check the
+band actually covers the old line before pressing Dub. Strength 100 clears a
+hard white-on-dark subtitle that the default 80 can leave as a faint ghost.
+
+The dubbed file keeps the original's name plus a language token
+(`…_w-34_l-es_s-1080x1350.mp4`), so the two sort together. Dubbing a file that
+is already a dub is refused. If the dub comes back without a transcript, the cut
+still gets the band but no new subtitles, and the dashboard says so rather than
+shipping a silent-looking cut as if it were finished.
+
 ## Commands
 
 | | |
