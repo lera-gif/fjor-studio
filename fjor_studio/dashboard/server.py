@@ -153,6 +153,7 @@ class Studio:
                 "prefix_map": {str(e.get("prefix", "")).upper(): k for k, e
                                in (cfg.verticals.get("verticals") or {}).items()},
                 "packshots": list_packshots(assets),
+                "delivery": self.delivery_status(),
                 # NAMES only. A value never reaches the page, and the page
                 # never asks: the whole point of a kit is that the keys stop
                 # existing anywhere they can be copied from.
@@ -364,6 +365,71 @@ class Studio:
             intake["crossfade_s"] = float(form["crossfade_s"])
         job = new_job(store, cfg, vertical, intake, job_id=parsed["id"])
         return job.id
+
+    def delivery_status(self) -> Dict[str, Any]:
+        """Where finals will land, and whether that can work.
+
+        Reported whether or not it is set: a producer on a new machine should
+        meet this as a setting to fill in, not as a refusal three clicks later."""
+        from ..config import MissingDeliveryRoot
+        cfg, _store, _engine = self.open()
+        week_folder = str(cfg.delivery.get("week_folder", "{week} week"))
+        try:
+            root = cfg.delivery_root
+        except MissingDeliveryRoot:
+            return {"root": "", "set": False, "week_folder": week_folder,
+                    "example": "", "problem": ""}
+        # An example is worth more than a description: a team whose folders are
+        # arranged differently can see the shape and say so before a job runs.
+        try:
+            vertical = sorted(cfg.verticals.get("verticals") or {})[0]
+            example = str(cfg.week_dir(vertical, 34))
+        except Exception:  # noqa: BLE001
+            example = str(root)
+        problem = ""
+        if not root.parent.exists():
+            problem = (f"{root.parent} does not exist. If that is a network "
+                       f"volume, mount it; if it is a typo, fix it -- the root "
+                       f"itself may be missing and will be created, but its "
+                       f"parent must be there.")
+        elif root.exists() and not os.access(root, os.W_OK):
+            problem = f"{root} is not writable by this user."
+        return {"root": str(root), "set": True, "week_folder": week_folder,
+                "example": example, "problem": problem}
+
+    def set_delivery(self, root: str, week_folder: str = "") -> Dict[str, Any]:
+        """Write the root into config/delivery.yaml, by LINE.
+
+        A whole-file rewrite through a YAML dumper would throw away every
+        comment in that file, and those comments are the only explanation of
+        the naming template a deployer gets."""
+        import re as _re
+        root = str(root or "").strip()
+        if not root:
+            raise ValueError("give a folder for the finals to be delivered into")
+        path = Path(root).expanduser()
+        if not path.parent.exists():
+            raise ValueError(
+                f"{path.parent} does not exist, so {path} cannot be created "
+                f"there. Mount the volume, or check the path.")
+        cfg, _store, _engine = self.open()
+        target = cfg.home / "config" / "delivery.yaml"
+        text = target.read_text()
+        new, count = _re.subn(r'^root:.*$', f'root: "{path}"', text,
+                              count=1, flags=_re.M)
+        if not count:
+            raise ValueError(
+                f"{target} has no `root:` line to set -- edit it by hand.")
+        if week_folder.strip():
+            if "{week}" not in week_folder:
+                raise ValueError(
+                    "the week folder must contain {week}, or every week of "
+                    "every vertical would deliver into one directory.")
+            new = _re.subn(r'^week_folder:.*$',
+                           f'week_folder: "{week_folder.strip()}"', new,
+                           count=1, flags=_re.M)[0]
+        target.write_text(new)
+        return self.delivery_status()
 
     def receive_upload(self, filename: str, stream, length: int) -> Dict[str, Any]:
         """Take a dropped file and put it somewhere a job can reference.
@@ -696,6 +762,9 @@ def make_handler(studio: Studio, token: str = ""):
             path = posixpath.normpath(urllib.parse.unquote(parsed.path))
             try:
                 payload = {} if path == "/api/uploads" else self._read_json()
+                if path == "/api/delivery":
+                    return self._json(studio.set_delivery(
+                        payload.get("root", ""), payload.get("week_folder", "")))
                 if path == "/api/kit":
                     # The body is already parsed above. Straight into memory
                     # from there: it is never written to disk, and the response

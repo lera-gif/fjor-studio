@@ -760,7 +760,7 @@ fjor_studio/
   cli.py               new / run / approve / revise / retry / status / config
 ```
 
-543 tests, all of which execute the code rather than inspecting it.
+549 tests, all of which execute the code rather than inspecting it.
 
 ---
 

@@ -188,10 +188,13 @@ class Config:
         root = str(self.delivery.get("root") or "").strip()
         if not root:
             raise MissingDeliveryRoot(
-                "no delivery root is configured, so there is nowhere to put a "
-                "final. Set `root:` in config/delivery.yaml, or the "
-                "FJOR_STUDIO_DELIVERY_ROOT environment variable, to the folder "
-                "that holds the vertical folders.")
+                "no delivery root is set, so there is nowhere to put a final. "
+                "Set it at the top of the dashboard -- it is the folder that "
+                "holds your vertical folders, and it can be anywhere. It can "
+                "also be `root:` in config/delivery.yaml or the "
+                "FJOR_STUDIO_DELIVERY_ROOT environment variable. This is "
+                "checked at INTAKE, before anything is bought, because a run "
+                "that discovers it at the end has already been paid for.")
         return Path(root).expanduser()
 
     def week_dir(self, vertical: str, week) -> Path:

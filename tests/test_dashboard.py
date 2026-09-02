@@ -1168,3 +1168,82 @@ def test_the_page_says_plainly_when_there_are_no_keys():
     for needle in ("No API keys", "Load a kit", "never written to disk",
                    "renderKit()", "/api/kit"):
         assert needle in PAGE, needle
+
+
+# -- the delivery folder, set from the page ----------------------------------
+
+def test_the_page_is_told_where_finals_land_and_whether_it_can_work(live):
+    base, *_ = live
+    _st, d = get(base + "/api/state")
+    dl = d["options"]["delivery"]
+    assert dl["set"] is True and dl["problem"] == ""
+    # an example is worth more than a description
+    assert "34 week" in dl["example"]
+
+
+def test_an_unset_root_is_reported_as_a_setting_not_a_crash(tmp_path, reference):
+    """A producer on a new machine should meet this as something to fill in.
+    The pipeline still refuses to START a job -- that check is at intake, before
+    anything is bought -- but they should never have to discover it that way."""
+    import yaml
+    home = tmp_path / "h"
+    write_config(home)
+    delivery = home / "config" / "delivery.yaml"
+    raw = yaml.safe_load(delivery.read_text())
+    raw["root"] = ""
+    delivery.write_text(yaml.safe_dump(raw))
+    studio = Studio(home)
+    status = studio.delivery_status()
+    assert status["set"] is False and status["root"] == ""
+    assert status["week_folder"]          # still says what the shape will be
+
+
+def test_setting_the_root_from_the_page_keeps_the_file_s_comments(live, tmp_path):
+    """A whole-file rewrite through a YAML dumper would throw away every comment
+    in delivery.yaml, and those comments are the only explanation of the naming
+    template a deployer gets."""
+    base, studio, _s, _j = live
+    cfg, _store, _engine = studio.open()
+    path = cfg.home / "config" / "delivery.yaml"
+    # the fixture writes this file through a dumper, so give it the comments a
+    # real one has, and check they are all still there afterwards
+    path.write_text("# how finals are named and where they go\n"
+                    "# week_folder must contain {week}\n" + path.read_text())
+    before = path.read_text()
+    target = tmp_path / "somewhere else"
+    target.mkdir()
+    _st, out = post(base + "/api/delivery", {"root": str(target)})
+    assert out["set"] is True and out["root"] == str(target)
+    after = path.read_text()
+    assert after.count("#") == before.count("#")
+    assert "how finals are named" in after
+    assert str(target) in after
+
+
+def test_a_week_folder_without_the_week_is_refused(live, tmp_path):
+    """Every week of every vertical would deliver into one directory."""
+    base, *_ = live
+    target = tmp_path / "root"
+    target.mkdir()
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        post(base + "/api/delivery",
+             {"root": str(target), "week_folder": "weekly"})
+    assert exc.value.code == 400
+    assert "{week}" in exc.value.read().decode()
+
+
+def test_a_root_whose_parent_is_missing_is_refused(live):
+    """That is what separates 'nothing has shipped yet' from a typo, or a
+    network volume nobody mounted."""
+    base, *_ = live
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        post(base + "/api/delivery", {"root": "/no/such/place/VIDEO"})
+    assert exc.value.code == 400
+    assert "does not exist" in exc.value.read().decode()
+
+
+def test_the_page_offers_the_setting_rather_than_only_the_error():
+    from fjor_studio.dashboard.page import PAGE
+    for needle in ("No delivery folder yet", "Set the delivery folder…",
+                   "renderSetup()", "/api/delivery", "It can be ANY folder"):
+        assert needle in PAGE, needle

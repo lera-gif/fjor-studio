@@ -163,6 +163,7 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
   <aside class="side">
     <div class="brand"><h1>FJOR Studio</h1>
       <button id="newBtn" class="primary" style="padding:5px 11px">New</button></div>
+<div id="setupBar"></div>
 <div id="kitBar"></div>
 <input type="file" id="kitInput" accept="application/json,.json" style="display:none">
     <div class="joblist" id="joblist"></div>
@@ -261,6 +262,27 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
   <div class="row end" style="margin-top:18px">
     <button type="button" onclick="devDlg.close()">Cancel</button>
     <button type="button" class="primary" id="devGo">Create</button>
+  </div>
+</form></dialog>
+
+<dialog id="dlvDlg"><form method="dialog">
+  <h3 style="margin:0 0 6px">Delivery folder</h3>
+  <p class="muted" style="margin:0 0 14px;font-size:12px">The folder that holds
+    your vertical folders. It can be anywhere — a local disk, a mounted share.
+    The studio creates the vertical and week folders inside it as they are
+    needed; it does not need them to exist first.</p>
+  <div id="dlvErr"></div>
+  <div><label>Delivery root</label>
+    <input id="dlvRoot" spellcheck="false" placeholder="/Volumes/creative/VIDEO"></div>
+  <div style="margin-top:12px"><label>Week folder</label>
+    <input id="dlvWeek" spellcheck="false" placeholder="{week} week">
+    <div class="hint" style="margin-top:4px">Must contain <code>{week}</code>.
+      Change it if your weeks are named differently — <code>w{week}</code>,
+      <code>Week {week}</code>.</div></div>
+  <div class="hint" id="dlvPreview" style="margin-top:12px;min-height:34px"></div>
+  <div class="row end" style="margin-top:18px">
+    <button type="button" onclick="dlvDlg.close()">Cancel</button>
+    <button type="button" class="primary" id="dlvGo">Save</button>
   </div>
 </form></dialog>
 
@@ -395,7 +417,59 @@ $('#kitInput').onchange=async e=>{
   }catch(err){ alert('That kit was refused:\n\n'+err.message); }
 };
 
+// Where finals land. A producer on a new machine should meet this as a setting
+// to fill in, not as a refusal three clicks later -- the pipeline checks it at
+// INTAKE, before anything is bought, and that check stays: a run that discovers
+// it at the end has already been paid for.
+function renderSetup(){
+  const bar=$('#setupBar'), d=(STATE.options&&STATE.options.delivery)||{};
+  if(!bar) return;
+  if(d.set && !d.problem){
+    bar.innerHTML=`<div class="muted" style="padding:6px 14px;font-size:11px">
+      delivers to <b style="color:var(--ink)">${esc(d.root)}</b>
+      <a href="#" onclick="editDelivery();return false" style="margin-left:6px">change</a></div>`;
+    return;
+  }
+  bar.innerHTML=`<div class="err" style="margin:10px 12px">
+    <b>${d.set?'The delivery folder has a problem.':'No delivery folder yet.'}</b>
+    ${d.set?esc(d.problem):'Finished creatives have nowhere to go, so the studio '
+      +'will not start a job. It can be ANY folder — the one that holds your '
+      +'vertical folders.'}
+    <div style="margin-top:8px"><button onclick="editDelivery()">Set the delivery folder…</button></div>
+  </div>`;
+}
+function editDelivery(){
+  const d=(STATE.options&&STATE.options.delivery)||{};
+  $('#dlvErr').innerHTML='';
+  $('#dlvRoot').value=d.root||'';
+  $('#dlvWeek').value=d.week_folder||'{week} week';
+  dlvPreview();
+  dlvDlg.showModal();
+}
+// Show the shape, not a description: a team whose folders are arranged
+// differently can see what this will produce and change it before a job runs.
+function dlvPreview(){
+  const root=$('#dlvRoot').value.trim().replace(/\/+$/,'');
+  const week=$('#dlvWeek').value.trim()||'{week} week';
+  $('#dlvPreview').innerHTML = root
+    ? 'A lymph-exercise final for week 34 will land at:<br><code>'
+      +esc(root)+'/LYMPH EXERCISE/'+esc(week.replace('{week}','34'))
+      +'/n-LME031_ch-fb_t-video_…_s-1080x1920.mp4</code>'
+    : 'Type a folder to see where finals will land.';
+}
+$('#dlvRoot').addEventListener('input',dlvPreview);
+$('#dlvWeek').addEventListener('input',dlvPreview);
+$('#dlvGo').onclick=async()=>{
+  try{
+    await api('/api/delivery',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({root:$('#dlvRoot').value,week_folder:$('#dlvWeek').value})});
+    dlvDlg.close(); await refresh();
+  }catch(e){ $('#dlvErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+};
+
 function renderSide(){
+  renderSetup();
   renderKit();
   $('#workerline').textContent = STATE.busy ? ('working on '+STATE.busy) : 'idle';
   $('#joblist').innerHTML = STATE.jobs.map(j=>`

@@ -89,6 +89,13 @@ export FJOR_STUDIO_HOME=/srv/fjor-studio       # where jobs/ and config/ live
 export FJOR_STUDIO_DELIVERY_ROOT=/mnt/creative/VIDEO
 ```
 
+**The easiest way is the dashboard.** Start it, and a bar at the top says there
+is no delivery folder yet and offers to set one. The dialog takes the root and
+the week-folder pattern, and previews exactly where a final will land as you
+type — change `{week} week` to `w{week}` or `Week {week}` if your weeks are
+named differently. It edits the `root:` line of `config/delivery.yaml` and
+leaves the rest of the file, comments included, alone.
+
 `FJOR_STUDIO_DELIVERY_ROOT` overrides `root:` in `config/delivery.yaml`, so one
 checkout serves several machines without editing a tracked file. Set one or the
 other: with neither, **intake refuses every job**. That is deliberate — delivery
