@@ -54,11 +54,17 @@ cannot produce a deliverable cut without them. Two things are not:
 
 | | |
 |---|---|
-| `assets/music bed/` | Optional. The editor's bed list is empty until `.mp3` files are dropped in. |
+| `assets/music bed/` | **Not in git, but it travels.** `share_copy.sh` copies the beds across as files, so a shared copy has the library even though no commit contains it — 435 MB of mp3 in a repository would sit in every clone forever. |
 | `assets/demos/` | Optional. Only used by jobs that ask for a demo insert. |
 
-Neither stops a job. Copy them across from an existing studio if the team wants
-the same library.
+Neither stops a job: with no beds the editor's list is simply empty.
+
+**`assets/music bed/_to_delete/` never travels.** It holds commercial
+recordings kept out of the picker because they must not be used, and
+`share_copy.sh` both excludes it and then refuses to finish if a copy of it
+turns up anyway. If you move beds between machines by hand, exclude that folder
+yourself — the picker skips it by NAME, so renaming it puts the tracks back into
+circulation.
 
 ### Keeping a shared copy up to date
 

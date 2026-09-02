@@ -374,8 +374,9 @@ function renderKit(){
   bar.innerHTML = have.length
     ? `<div class="muted" style="padding:8px 14px;font-size:11px;
         border-bottom:1px solid var(--line)">keys: ${have.map(esc).join(', ')}
-        <span style="opacity:.6">${k.source?'· '+esc(k.source):''}</span>
-        <a href="#" onclick="kitInput.click();return false" style="margin-left:6px">replace</a></div>`
+        <span style="opacity:.6">${k.source?'· from '+esc(k.source):''}</span>
+        <a href="#" onclick="kitInput.click();return false"
+           style="margin-left:8px">Load a kit…</a></div>`
     : `<div class="err" style="margin:10px 12px">
         <b>No API keys.</b> Nothing can be generated until a kit is loaded.
         <div style="margin-top:8px"><button onclick="kitInput.click()">Load a kit…</button></div>

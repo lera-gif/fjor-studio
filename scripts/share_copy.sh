@@ -69,11 +69,34 @@ p.write_text("""# fjor-studio
 """ + s[len(title):])
 PY
 
+# The music beds, which git does not carry and should not: 435 MB of mp3 would
+# sit in every clone of both repositories forever, and git stores audio no more
+# cleverly than a copy does. They ride along as FILES -- the share copy's own
+# .gitignore (which travels with it) leaves them untracked, so they reach the
+# team in the folder and in any zip of it without entering either history.
+#
+# `_to_delete` NEVER travels. It holds commercial recordings -- One Direction,
+# Carly Rae Jepsen, Glass Animals, Hans Zimmer -- quarantined out of the picker
+# because they must not be used, and redistributing them to a team would be a
+# different and worse problem than using them. The exclusion is enforced below
+# rather than trusted.
+BEDS="assets/music bed"
+if [ -d "$SRC/$BEDS" ]; then
+  mkdir -p "$DST/$BEDS"
+  rsync -a --delete --exclude "_to_delete" --exclude ".DS_Store"         "$SRC/$BEDS/" "$DST/$BEDS/"
+  if [ -e "$DST/$BEDS/_to_delete" ]; then
+    echo "refusing: the quarantined tracks reached the share copy" >&2
+    exit 1
+  fi
+  echo "music beds: $(find "$DST/$BEDS" -type f | wc -l | tr -d ' ') files, $(du -sh "$DST/$BEDS" | cut -f1) (quarantine excluded)"
+fi
+
 # The check that matters: no home directory survived the transforms. The needle
 # is assembled rather than written out, or this line matches its own guard --
 # which is exactly what happened the first time it ran.
 NEEDLE="$(printf '/%s/|/%s/' Users home)"
-if grep -rElI --exclude-dir=.git --exclude-dir=.venv "$NEEDLE" "$DST" \
+if grep -rElI --exclude-dir=.git --exclude-dir=.venv \
+     --exclude-dir="music bed" "$NEEDLE" "$DST" \
      | grep -v "config/delivery.yaml" | grep . ; then
   echo "refusing: the files above still carry an absolute home path" >&2
   exit 1
