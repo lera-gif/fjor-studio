@@ -155,8 +155,8 @@ def test_a_diet_vertical_forbids_the_lexicon_an_activity_one_requires():
 
 def test_the_nutrition_verticals_are_registered_and_loreful():
     cfg = shipped()
-    for name, prefix in (("mediterranean_diet", "MED"), ("cortisol_diet", "CORT"),
-                         ("biblical_diet", "BIB"), ("intermittent_fasting", "IF")):
+    for name, prefix in (("mediterranean_diet", "M"), ("cortisol_diet", "COR"),
+                         ("biblical_diet", "R"), ("intermittent_fasting", "IF")):
         assert cfg.vertical(name, strict=True)["prefix"] == prefix
         assert cfg.vertical_for_prefix(prefix) == name
         assert lore.for_vertical(cfg, name).get("mechanic")

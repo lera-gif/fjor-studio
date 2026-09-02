@@ -35,13 +35,11 @@ verticals:
   # Every vertical above is ACTIVITY; these four are the first food ones, and
   # the pipeline treats them no differently -- only their lore does.
   #
-  # PROVISIONAL, and the only part of this file that is: nothing has shipped
-  # under these prefixes, no folder for them exists on the delivery tree, and
-  # there was nothing to read them off. The folder names are the product names
-  # from the colleague's own templates ("Mediterranean Diet", "Cortisol Diet",
-  # "Biblical Diet"); the prefixes are ours. Correct both against the live tree
-  # before the first delivery, while it is still cheap.
-  mediterranean_diet:   {prefix: MED,  folder: "MEDITERRANEAN DIET"}
-  cortisol_diet:        {prefix: CORT, folder: "CORTISOL DIET"}
-  biblical_diet:        {prefix: BIB,  folder: "BIBLICAL DIET"}
+  # Prefixes confirmed by the owner 2026-09-02; the folder names are the product
+  # names from the colleague's own templates. R is for biblical_diet because the
+  # colleague's tool calls that niche `religion` -- the prefix follows the niche,
+  # not the product name, and an id reader needs to know that.
+  mediterranean_diet:   {prefix: "M",  folder: "MEDITERRANEAN DIET"}
+  cortisol_diet:        {prefix: COR,  folder: "CORTISOL DIET"}
+  biblical_diet:        {prefix: "R",  folder: "BIBLICAL DIET"}
   intermittent_fasting: {prefix: IF,   folder: "INTERMITTENT FASTING"}
