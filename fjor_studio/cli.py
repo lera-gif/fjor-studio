@@ -48,15 +48,31 @@ def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="fjor-studio")
     p.add_argument("--home", type=Path, default=None,
                    help="studio root (default: $FJOR_STUDIO_HOME or cwd)")
+    p.add_argument("--kit", default=None,
+                   help="a JSON file of API keys, read for this command only "
+                        "and never written anywhere. Accepts this studio's "
+                        "shape or the colleague's settings-kit export. "
+                        "$FJOR_STUDIO_KIT does the same for a whole shell")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     n = sub.add_parser("new", help="create a job")
     n.add_argument("vertical", nargs="?", default=None,
                    help="a key from verticals.yaml; omit when using --name")
-    n.add_argument("reference", help="path to the reference video")
+    n.add_argument("reference",
+                   help="the reference VIDEO to re-create, or a client BANNER "
+                        "image to expand and animate -- the suffix decides")
     n.add_argument("--name", default=None,
                    help="the whole creative name -- carries id, week, concept "
                         "and producer, and its prefix picks the vertical")
+    n.add_argument("--ref-kind", default=None, choices=("ugc", "replica"),
+                   help="how to treat a VIDEO reference: 'ugc' re-creates the "
+                        "idea; 'replica' reproduces its own look, with stills "
+                        "cut from it and attached to every plate")
+    n.add_argument("--morph", default="",
+                   help="a transformation on camera, with no cut: what changes. "
+                        "One shot carries it and buys TWO plates")
+    n.add_argument("--text-card", default="",
+                   help="our words, set the way the reference sets its own")
     n.add_argument("--brief", default="",
                    help="what the pipeline should know about this one")
     n.add_argument("--week", type=int, default=None,
@@ -132,6 +148,13 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     args = p.parse_args(argv)
 
+    # The kit is read BEFORE anything opens a studio, because `config.load`
+    # consults it. Read, held for this process, never written down.
+    if getattr(args, "kit", None):
+        from . import kit as kit_mod
+        loaded = kit_mod.use(kit_mod.read(Path(args.kit)), source=args.kit)
+        print(f"keys for {', '.join(loaded)} — held for this command only")
+
     # `open_studio` constructs the backends, which is where a missing key is
     # caught -- deliberately, so routing into a gap fails before a stage is paid
     # for rather than in the middle of one (BLUEPRINT 5). But these commands are
@@ -196,11 +219,23 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"missing {', '.join(missing)} — pass --name with the whole "
                   f"creative name, or give them individually")
             return 2
-        intake = {"reference": str(args.reference), "week": week,
+        # A video is a reference to analyse and re-create; an image is a
+        # finished banner to expand and animate. They are two pipelines, so the
+        # job carries one key or the other and never both -- see
+        # stages/banner_steps.is_banner, which refuses the ambiguity.
+        from .stages.banner_steps import BANNER_SUFFIXES
+        source = ("banner" if Path(args.reference).suffix.lower()
+                  in BANNER_SUFFIXES else "reference")
+        intake = {source: str(args.reference), "week": week,
                   "concept": concept, "producer": producer,
                   "brief": args.brief,
                   "packshot": args.packshot, "demo": args.demo,
                   "demo_trim_s": args.demo_trim_s}
+        for flag, key in (("ref_kind", "ref_kind"), ("morph", "morph"),
+                          ("text_card", "text_card")):
+            value = str(getattr(args, flag, "") or "").strip()
+            if value:
+                intake[key] = value
         if args.scenes is not None:
             intake["scene_count"] = args.scenes
         if args.music:
@@ -280,11 +315,13 @@ def cli(argv=None) -> int:
     broken when it is the file, or the process, that is."""
     from .config import MissingDeliveryRoot, UnknownVertical
     from .gen.base import GenError
+    from .kit import KitError
     from .engine.engine import TransitionError
     try:
         return main(argv)
     except (MissingDeliveryRoot, UnknownVertical, GenError, TransitionError,
-            FileNotFoundError, PermissionError, IsADirectoryError) as exc:
+            KitError, FileNotFoundError, PermissionError,
+            IsADirectoryError) as exc:
         print(f"fjor-studio: {exc}", file=sys.stderr)
         return 2
 

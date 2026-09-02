@@ -42,6 +42,17 @@ class MockBackend(Backend):
         # consumed in order and its last entry repeats, which is how a test says
         # "fail the first plate, pass the retry".
         self.replies: Dict[str, Any] = dict(cfg.get("replies") or {})
+        # "the model returned its input unchanged". An image edit -- a keyed
+        # card, a banner expansion -- is given the frame it edits, and a double
+        # that hands back an unrelated prototype cannot exercise a check that
+        # COMPARES the two.
+        self.echo_images = bool(cfg.get("echo_images"))
+        # ... at ITS OWN resolution, which is what a real one does. AW025 cost
+        # two paid failures to discover that nano-banana-pro answers a 1080x1920
+        # canvas with 768x1376 (or 1536x2752 at 2K), the same size every time,
+        # whatever the prompt asks for. A double that always answers in the
+        # exact size it was given cannot fail the way the real thing does.
+        self.echo_size = cfg.get("echo_size") or None
         self._reply_pos: Dict[str, int] = {}
         self.calls: List[Dict[str, Any]] = []
 
@@ -127,6 +138,16 @@ class MockBackend(Backend):
             target = self.out_dir / f"{result.task_id}.{ext}"
         path = Path(target)
         path.parent.mkdir(parents=True, exist_ok=True)
+        medias = raw.get("medias") or []
+        if self.echo_images and result.kind == "image" and medias:
+            if self.echo_size:
+                w, h = (int(v) for v in self.echo_size)
+                _ffmpeg(["-i", str(medias[0]), "-vf",
+                         f"scale={w}:{h}:flags=lanczos", "-frames:v", "1",
+                         str(path)], path)
+            else:
+                shutil.copyfile(medias[0], path)
+            return str(path)
         # REAL media, not a text file with a media extension. Assembly is ffmpeg,
         # and a mock whose output ffmpeg cannot open would let the whole assembly
         # stage pass in tests while being incapable of ever working.

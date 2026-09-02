@@ -123,3 +123,29 @@ def test_a_config_it_cannot_read_is_a_sentence_too(home, reference, capsys):
     assert code == 2
     assert "Traceback" not in err
     assert "pipeline.yaml" in err
+
+
+def test_the_cli_can_ask_for_everything_the_dashboard_can(cli_home, tmp_path):
+    """Parity, checked rather than assumed. `--ref-kind`, `--morph` and
+    `--text-card` reached the dashboard and never reached the CLI, because an
+    edit asserted on a pattern that lives in the other file and silently wrote
+    nothing. The deploy doc then told people to run flags that did not exist."""
+    home, reference = cli_home
+    from fjor_studio.engine.store import JobStore
+    assert run(home, "new", "lipedema_pilates", str(reference),
+               "--name", "n-LIPIL700_ch-fb_t-video_c-morph_pr-lp_ds-nano_w-34_s-1080x1350",
+               "--ref-kind", "replica",
+               "--morph", "her posture straightens",
+               "--text-card", "5 minutes a day") == 0
+    intake = JobStore(home / "jobs").load("LIPIL700").intake
+    assert intake["ref_kind"] == "replica"
+    assert intake["morph"] == "her posture straightens"
+    assert intake["text_card"] == "5 minutes a day"
+
+
+def test_an_unknown_reference_kind_is_refused_at_the_flag(cli_home):
+    home, reference = cli_home
+    with pytest.raises(SystemExit):
+        run(home, "new", "lipedema_pilates", str(reference),
+            "--name", "n-LIPIL701_ch-fb_t-video_c-ugc_pr-lp_ds-nano_w-34_s-1080x1350",
+            "--ref-kind", "pixar")

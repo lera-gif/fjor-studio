@@ -23,6 +23,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..app import new_job, open_studio
 from ..assemble import list_music, list_packshots
+from .. import kit as kit_mod
+from ..kit import KitError
+from ..qa import blocking_scenes
+from ..refkind import KINDS as REF_KINDS
 from ..subtitles import COLOURS as SUB_COLOURS
 from ..config import UnknownVertical
 from ..derive import FROM_STAGES, DeriveError, derive
@@ -110,6 +114,13 @@ class Studio:
                 engine.reassemble(job, payload.get("note", ""))
             elif action == "cancel":
                 engine.cancel(job, payload.get("note", ""))
+            elif action == "waive":
+                engine.waive(job, payload.get("scenes") or [],
+                             (payload.get("note") or "").strip())
+            elif action == "driver":
+                engine.drive(job, payload["source"], payload.get("scenes") or [],
+                             payload.get("engine") or "seedance",
+                             (payload.get("note") or "").strip())
             else:
                 raise ValueError(f"unknown action '{action}'")
 
@@ -142,6 +153,18 @@ class Studio:
                 "prefix_map": {str(e.get("prefix", "")).upper(): k for k, e
                                in (cfg.verticals.get("verticals") or {}).items()},
                 "packshots": list_packshots(assets),
+                # NAMES only. A value never reaches the page, and the page
+                # never asks: the whole point of a kit is that the keys stop
+                # existing anywhere they can be copied from.
+                "keys": {"source": kit_mod.source() or
+                                   ("config/auth.yaml" if cfg.auth else ""),
+                         "providers": sorted(
+                             k for k, v in (cfg.auth or {}).items()
+                             if isinstance(v, dict)
+                             and str(v.get("api_key") or "").strip())},
+                "ref_kinds": sorted(REF_KINDS),
+                "ref_kind_default": str(((cfg.pipeline or {}).get("analysis")
+                                         or {}).get("ref_kind", "ugc")),
                 "music": list_music(assets),
                 "formats": list(((cfg.pipeline or {}).get("delivery") or {})
                                 .get("formats", [])),
@@ -169,6 +192,10 @@ class Studio:
             "next_forecast": job.forecasts.get(forecast_key) if forecast_key else None,
             "artifacts": job.artifacts,
             "revisable": sorted(REVISABLE.get(job.state, {})),
+            # Which shots are stopping the delivery, decided by the same policy
+            # preflight uses -- a speech-only verdict under an external voice is
+            # not blocking, and a waived one no longer is.
+            "blocking": blocking_scenes(job.scenes, "clip_qa"),
             "open_submissions": job.open_submissions(),
             "busy": self.worker.queued_for(job.id),
             "analysis": (job.analysis.get("text") or "")[:4000],
@@ -312,8 +339,14 @@ class Studio:
                 for k, e in (cfg.verticals.get("verticals") or {}).items())
             raise ValueError(
                 f"no vertical uses the id prefix '{prefix}'. Known: {known}")
+        from ..stages.banner_steps import BANNER_SUFFIXES
+        source = form.get("reference") or form.get("banner") or ""
+        # Same rule as the CLI: the suffix decides which pipeline. A job
+        # carrying both keys is refused at intake before anything is paid for.
+        key = ("banner" if Path(str(source)).suffix.lower() in BANNER_SUFFIXES
+               else "reference")
         intake = {
-            "reference": form["reference"],
+            key: source,
             "week": parsed["week"],
             "concept": parsed["concept"],
             "producer": parsed["producer"],
@@ -322,6 +355,9 @@ class Studio:
             "music": form.get("music") or None,
             "creative_name": form["creative_name"].strip(),
         }
+        for field in ("morph", "text_card", "ref_kind"):
+            if (form.get(field) or "").strip():
+                intake[field] = form[field].strip()
         if form.get("scenes") not in (None, ""):
             intake["scene_count"] = int(form["scenes"])
         if form.get("crossfade_s") not in (None, ""):
@@ -337,12 +373,21 @@ class Studio:
         are streamed to disk rather than read into memory, and probed before
         being accepted: a reference with no video stream fails here, in a dialog,
         instead of three stages later inside a paid run."""
+        from ..stages.banner_steps import BANNER_SUFFIXES
         cfg, _store, _engine = self.open()
         safe = safe_filename(filename)
-        if Path(safe).suffix.lower() not in VIDEO_SUFFIXES:
+        suffix = Path(safe).suffix.lower()
+        # An image is a finished banner to expand and animate; a video is a
+        # reference to analyse and re-create. Two different pipelines, decided
+        # here so the dialog can SAY which one before anything is created --
+        # their tool announces it with a toast for the same reason.
+        kind = ("banner" if suffix in BANNER_SUFFIXES
+                else "reference" if suffix in VIDEO_SUFFIXES else "")
+        if not kind:
             raise ValueError(
-                f"'{safe}' is not a video file "
-                f"({', '.join(sorted(VIDEO_SUFFIXES))})")
+                f"'{safe}' is neither a reference video "
+                f"({', '.join(sorted(VIDEO_SUFFIXES))}) nor a banner image "
+                f"({', '.join(sorted(BANNER_SUFFIXES))})")
         if length <= 0:
             raise ValueError("empty upload")
         if length > MAX_UPLOAD:
@@ -368,20 +413,30 @@ class Studio:
             video = next((st for st in info.get("streams") or []
                           if st.get("codec_type") == "video"), None)
             if video is None:
-                raise ValueError(f"'{safe}' has no video stream")
+                raise ValueError(
+                    f"'{safe}' has no {'image' if kind == 'banner' else 'video'} "
+                    f"stream -- the file is named like one but is not one")
+            out = {
+                "path": str(dest), "name": safe, "size": written, "kind": kind,
+                "width": int(video.get("width") or 0),
+                "height": int(video.get("height") or 0),
+            }
+            if kind == "banner":
+                # What the expansion will have to paint, in pixels, before the
+                # producer commits to it. A banner already vertical needs none.
+                from .. import banner as banner_mod
+                place = banner_mod.placement(out["width"], out["height"])
+                out["expansion"] = {"top": place["top"], "bottom": place["bottom"]}
+            else:
+                out["duration_s"] = round(float((info.get("format") or {})
+                                                .get("duration") or 0), 2)
+                out["has_audio"] = any(st.get("codec_type") == "audio"
+                                       for st in info.get("streams") or [])
         except Exception:
             import shutil as _sh
             _sh.rmtree(dest_dir, ignore_errors=True)
             raise
-        return {
-            "path": str(dest), "name": safe, "size": written,
-            "duration_s": round(float((info.get("format") or {})
-                                      .get("duration") or 0), 2),
-            "width": int(video.get("width") or 0),
-            "height": int(video.get("height") or 0),
-            "has_audio": any(st.get("codec_type") == "audio"
-                             for st in info.get("streams") or []),
-        }
+        return out
 
     def derive(self, source_id: str, form: Dict[str, Any]) -> str:
         from ..ids import parse as parse_id
@@ -641,6 +696,12 @@ def make_handler(studio: Studio, token: str = ""):
             path = posixpath.normpath(urllib.parse.unquote(parsed.path))
             try:
                 payload = {} if path == "/api/uploads" else self._read_json()
+                if path == "/api/kit":
+                    # The body is already parsed above. Straight into memory
+                    # from there: it is never written to disk, and the response
+                    # says only which providers arrived, never a value.
+                    return self._json(
+                        {"providers": kit_mod.use(kit_mod.parse(payload))})
                 if path == "/api/uploads":
                     return self._json(studio.receive_upload(
                         self.headers.get("X-Filename", ""), self.rfile,
@@ -660,14 +721,16 @@ def make_handler(studio: Studio, token: str = ""):
                 if m:
                     job_id, action = m.group(1), m.group(2)
                     if action not in ("run", "approve", "revise", "retry",
-                                      "reassemble", "cancel", "edit"):
+                                      "reassemble", "cancel", "edit", "driver",
+                                      "waive"):
                         return self._json({"error": f"unknown action {action}"}, 400)
                     studio.worker.submit(job_id, action, payload)
                     return self._json({"queued": action, "id": job_id})
                 self._json({"error": "not found"}, 404)
             except UnknownVertical as exc:
                 self._json({"error": str(exc)}, 400)
-            except (TransitionError, DeriveError, ValueError, KeyError) as exc:
+            except (TransitionError, DeriveError, KitError, ValueError,
+                    KeyError) as exc:
                 self._json({"error": f"{type(exc).__name__}: {exc}"}, 400)
             except Exception as exc:  # noqa: BLE001
                 self._json({"error": f"{type(exc).__name__}: {exc}"}, 500)

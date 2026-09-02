@@ -440,12 +440,13 @@ def test_a_file_with_no_video_stream_is_refused(live, tmp_path):
     assert "no video stream" in exc.value.read().decode()
 
 
-def test_a_non_video_extension_is_refused_before_it_is_written(live):
+def test_a_file_that_is_neither_a_reference_nor_a_banner_is_refused(live):
     base, *_ = live
     with pytest.raises(urllib.error.HTTPError) as exc:
         _upload(base, "notes.txt", b"hello")
     assert exc.value.code == 400
-    assert "not a video file" in exc.value.read().decode()
+    body = exc.value.read().decode()
+    assert "neither a reference video" in body and "banner image" in body
 
 
 def test_an_empty_upload_is_refused(live):
@@ -467,7 +468,7 @@ def test_a_rejected_upload_leaves_nothing_behind(live, tmp_path):
 
 def test_the_dialog_will_not_submit_without_a_dropped_file():
     from fjor_studio.dashboard.page import PAGE
-    assert "Drop a reference video first" in PAGE
+    assert "Drop a reference video or a banner first" in PAGE
     assert "if(!UPLOAD){" in PAGE
 
 
@@ -972,3 +973,198 @@ def test_the_restart_launcher_reuses_the_one_launcher():
     assert "FJOR_STUDIO_RESTART=1" in restart
     assert "./FJOR Studio.command" in restart
     assert "FJOR_STUDIO_RESTART" in (root / "FJOR Studio.command").read_text()
+
+
+# -- the new features on the page --------------------------------------------
+
+def test_a_dropped_banner_is_recognised_and_its_expansion_measured(live, tmp_path):
+    """The dialog has to be able to SAY which pipeline is about to run, before
+    anything is created. Their tool toasts it for the same reason: the two modes
+    look alike from the outside and mixing them wastes a whole generation."""
+    from conftest import a_banner
+    base, *_ = live
+    status, out = _upload(base, "banner.png",
+                          a_banner(tmp_path / "b.png").read_bytes())
+    assert status == 200
+    assert out["kind"] == "banner"
+    assert (out["width"], out["height"]) == (1080, 1080)
+    assert out["expansion"] == {"top": 420, "bottom": 420}
+    assert "duration_s" not in out           # an image has none, so none is claimed
+
+
+def test_a_dropped_video_is_still_a_reference(live, tmp_path):
+    base, *_ = live
+    status, out = _upload(base, "ref.mp4",
+                          _real_video(tmp_path).read_bytes())
+    assert status == 200 and out["kind"] == "reference"
+    assert out["duration_s"] > 0
+
+
+def test_creating_from_a_banner_makes_a_banner_job(live, tmp_path):
+    from conftest import a_banner
+    base, studio, store, _job = live
+    _s, up = _upload(base, "banner.png", a_banner(tmp_path / "b.png").read_bytes())
+    _s, made = post(base + "/api/jobs", {
+        "creative_name": "n-LIPIL301_ch-fb_t-video_c-banner_pr-lp_ds-nano_w-34_s-1080x1350",
+        "banner": up["path"]})
+    intake = store.load(made["id"]).intake
+    assert intake["banner"] == up["path"]
+    assert "reference" not in intake          # two pipelines, never both
+
+
+def test_the_transformation_and_the_card_reach_the_job(live, tmp_path):
+    base, _studio, store, _job = live
+    _s, up = _upload(base, "ref.mp4", _real_video(tmp_path).read_bytes())
+    _s, made = post(base + "/api/jobs", {
+        "creative_name": "n-LIPIL302_ch-fb_t-video_c-morph_pr-lp_ds-nano_w-34_s-1080x1350",
+        "reference": up["path"],
+        "morph": "her posture straightens and the swelling goes down",
+        "text_card": "5 minutes a day"})
+    intake = store.load(made["id"]).intake
+    assert intake["morph"].startswith("her posture")
+    assert intake["text_card"] == "5 minutes a day"
+
+
+def test_a_driver_is_registered_and_attached_in_one_action(live, tmp_path):
+    """Splitting them would let a producer leave a driver attached to nothing --
+    or pass the plan gate with the shots not yet retimed to the driver."""
+    base, studio, store, job = live
+    _s, up = _upload(base, "driver.mp4", _real_video(tmp_path, seconds=2).read_bytes())
+    post(base + f"/api/jobs/{job.id}/run")
+    wait(studio, job.id)
+    _s, out = post(base + f"/api/jobs/{job.id}/driver",
+                   {"source": up["path"], "engine": "kling-mc-3.0",
+                    "note": "the sit-up", "scenes": [0]})
+    assert out["queued"] == "driver"
+    wait(studio, job.id)
+    job = store.load(job.id)
+    drivers = job.meta["drivers"]
+    assert len(drivers) == 1 and drivers[0]["engine"] == "kling-mc-3.0"
+    assert job.scenes[0]["driver"] == drivers[0]["id"]
+    # Motion Control runs exactly as long as the driver, so the shot was retimed
+    assert job.scenes[0]["duration_s"] == drivers[0]["duration_s"]
+    assert job.scenes[1].get("driver") in (None, "")
+
+
+def test_a_driver_attached_to_no_shot_is_refused(live, tmp_path):
+    base, studio, store, job = live
+    _s, up = _upload(base, "driver.mp4", _real_video(tmp_path).read_bytes())
+    post(base + f"/api/jobs/{job.id}/run")
+    wait(studio, job.id)
+    post(base + f"/api/jobs/{job.id}/driver", {"source": up["path"], "scenes": []})
+    wait(studio, job.id)
+    assert not store.load(job.id).meta.get("drivers")
+
+
+def test_the_page_offers_the_new_controls():
+    from fjor_studio.dashboard.page import PAGE
+    for needle in ("Add a driver…", "Motion drivers", "Transformation on camera",
+                   "Text card in the reference", "Banner mode", "the banner survived",
+                   "openDriver()", "/driver"):
+        assert needle in PAGE, needle
+
+
+# -- a blocked job is decidable, on the page ---------------------------------
+
+def _blocked(home, reference):
+    """A job stopped by preflight on a critical clip verdict."""
+    critical = json.dumps({"passed": False, "severity": "critical",
+                           "issues": ["body-type mismatch"],
+                           "summary": "wrong build"})
+    write_config(home, pipeline={"gates": {"skip": ["GATE_PLAN", "GATE_CLIPS"]}})
+    write_replies(home, analysis="analysed", text=scene_plan(2),
+                  **{"qa:plate": json.dumps({"passed": True, "severity": "ok"}),
+                     "qa:clip": critical})
+    cfg, store, engine = open_studio(home)
+    job = make_job(store, reference, scenes=2, config=cfg)
+    job = engine.approve(engine.approve(engine.approve(engine.run(job))))
+    return cfg, store, engine, job
+
+
+def test_a_blocked_job_reports_which_shots_and_stays_at_the_gate(live, home, reference):
+    base, studio, _s, _j = live
+    _cfg, store, _engine, job = _blocked(home, reference)
+    _st, d = get(f"{base}/api/jobs/{job.id}")
+    assert d["state"] == "GATE_DRAFT"        # not 'failed': it is decidable here
+    assert d["blocking"] == [0, 1]
+    assert "waive" in d["error"] and "revise" in d["error"]
+    # and the still can be re-bought from here, not only the animation
+    assert "plates" in d["revisable"] and "clip" in d["revisable"]
+
+
+def test_waiving_from_the_page_ships_it_and_keeps_the_finding(live, home, reference):
+    base, studio, _s, _j = live
+    _cfg, store, _engine, job = _blocked(home, reference)
+    post(f"{base}/api/jobs/{job.id}/waive",
+         {"scenes": [0, 1], "note": "checked both; ships"})
+    wait(studio, job.id)
+    post(f"{base}/api/jobs/{job.id}/approve")
+    wait(studio, job.id)
+    job = store.load(job.id)
+    assert job.state == "done"
+    # accepted, not deleted
+    assert job.scenes[0]["clip_qa"]["severity"] == "critical"
+
+
+def test_the_page_offers_both_ways_past_a_block():
+    from fjor_studio.dashboard.page import PAGE
+    for needle in ("Blocking the delivery", "Accept and ship", "Buy it again",
+                   "openWaive()", "there is no accept-all",
+                   "not repaired by buying the animation"):
+        assert needle in PAGE, needle
+
+
+# -- keys arrive with the producer -------------------------------------------
+
+def test_the_page_is_told_which_providers_answered_and_never_a_value(live):
+    base, *_ = live
+    _st, d = get(base + "/api/state")
+    keys = d["options"]["keys"]
+    assert set(keys) == {"source", "providers"}
+    assert all(isinstance(p, str) for p in keys["providers"])
+    # the whole page, searched for anything key-shaped
+    with urllib.request.urlopen(base + "/", timeout=10) as r:
+        page = r.read().decode()
+    assert "api_key" not in page
+
+
+def test_a_kit_is_read_into_memory_and_never_written_to_disk(live, tmp_path):
+    base, studio, _s, _j = live
+    cfg, _store, _engine = studio.open()
+    before = {p for p in cfg.home.rglob("*") if p.is_file()}
+    secret = "SK-KIT-DO-NOT-PERSIST-0001"
+    req = urllib.request.Request(
+        base + "/api/kit",
+        data=json.dumps({"kie": {"api_key": secret}}).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        assert json.loads(r.read().decode())["providers"] == ["kie"]
+    after = {p for p in cfg.home.rglob("*") if p.is_file()}
+    for path in after:
+        try:
+            assert secret not in path.read_text(errors="ignore"), path
+        except (UnicodeDecodeError, IsADirectoryError):
+            pass
+    assert after == before, "a kit upload created a file"
+    # and the studio can now see the key it was given
+    from fjor_studio import kit as kit_mod
+    assert kit_mod.providers() == ["kie"]
+    kit_mod.clear()
+
+
+def test_a_kit_with_nothing_usable_is_refused_rather_than_loaded_empty(live):
+    base, *_ = live
+    req = urllib.request.Request(
+        base + "/api/kit", data=json.dumps({"nonsense": 1}).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        urllib.request.urlopen(req, timeout=10)
+    assert exc.value.code == 400
+    assert "no usable API keys" in exc.value.read().decode()
+
+
+def test_the_page_says_plainly_when_there_are_no_keys():
+    from fjor_studio.dashboard.page import PAGE
+    for needle in ("No API keys", "Load a kit", "never written to disk",
+                   "renderKit()", "/api/kit"):
+        assert needle in PAGE, needle

@@ -26,6 +26,11 @@ input,select,textarea{font:inherit;background:#0b0d10;color:var(--ink);
 textarea{resize:vertical;min-height:64px}
 label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);margin:0 0 4px}
+/* a tick-and-word, not a field caption: the uppercase field label above would
+   make "shot 0" read as a heading for something that is not there */
+label.tick{display:inline-flex;align-items:center;gap:6px;font-size:13px;
+  white-space:nowrap;flex:0 0 auto;
+  text-transform:none;letter-spacing:0;color:var(--ink);margin:0;cursor:pointer}
 .layout{display:grid;grid-template-columns:290px 1fr;height:100vh}
 .side{background:var(--panel);border-right:1px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden}
@@ -70,6 +75,11 @@ label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.07em
 .scene .media{background:#000;aspect-ratio:9/16;display:flex;align-items:center;
   justify-content:center;overflow:hidden}
 .scene .media img,.scene .media video{width:100%;height:100%;object-fit:cover;display:block}
+/* a transformation is two 9:16 frames side by side, so the box is twice as
+   wide -- squeezing them into one frame's width crops both to slivers */
+.scene .media.pair{aspect-ratio:9/8}
+.scene .media.pair img{width:50%}
+.scene .media.pair img+img{border-left:1px solid var(--accent)}
 .scene .meta{padding:9px 11px;font-size:12px}
 .scene .prompt{color:var(--dim);font-size:11px;max-height:52px;overflow:hidden;margin-top:5px}
 .shots{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-start;
@@ -153,6 +163,8 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
   <aside class="side">
     <div class="brand"><h1>FJOR Studio</h1>
       <button id="newBtn" class="primary" style="padding:5px 11px">New</button></div>
+<div id="kitBar"></div>
+<input type="file" id="kitInput" accept="application/json,.json" style="display:none">
     <div class="joblist" id="joblist"></div>
     <div style="padding:10px 14px;border-top:1px solid var(--line);font-size:11px"
          class="muted" id="workerline">idle</div>
@@ -176,13 +188,30 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
   <div class="hint" id="vertWarn" style="margin-top:6px;min-height:14px"></div>
   <div style="margin-top:6px"><label>Brief — anything the pipeline should know</label>
     <textarea name="brief" id="f_brief" placeholder="Angle, must-haves, what to avoid, who it is for. This outranks the house guidance where they disagree."></textarea></div>
-  <div style="margin-top:12px"><label>Reference video</label>
+  <div style="margin-top:12px"><label>Source</label>
     <div class="drop" id="drop">
-      <div class="big">Drop the reference video here</div>
-      <div class="hint">or click to choose &middot; mp4, mov, m4v, webm, avi, mkv</div>
+      <div class="big">Drop the reference video, or a client banner</div>
+      <div class="hint">or click to choose &middot; a VIDEO is analysed and re-created &middot;
+        an IMAGE is expanded to 9:16 and animated</div>
       <div class="bar" id="dropBar" style="display:none"><i></i></div>
     </div>
-    <input type="file" id="dropInput" accept="video/*" style="display:none">
+    <input type="file" id="dropInput" accept="video/*,image/*" style="display:none">
+  </div>
+  <div id="modeNote" class="hint" style="margin-top:8px;min-height:14px"></div>
+  <div id="ugcOnly">
+    <div style="margin-top:12px"><label>Reference kind</label>
+      <select name="ref_kind" id="f_refkind"></select>
+      <div class="hint" id="refKindNote" style="margin-top:4px"></div></div>
+    <div style="margin-top:12px"><label>Transformation on camera — optional</label>
+      <input name="morph" id="f_morph" spellcheck="false"
+        placeholder="what changes in shot, with no cut: e.g. her posture straightens and the swelling goes down">
+      <div class="hint" style="margin-top:4px">One shot carries it, and the writer builds
+        the creative around it. Two plates are bought for that shot, not one.</div></div>
+    <div style="margin-top:12px"><label>Text card in the reference&rsquo;s style — optional</label>
+      <textarea name="text_card" id="f_card" style="min-height:52px"
+        placeholder="our words, set the way the reference sets its own"></textarea>
+      <div class="hint" style="margin-top:4px">The manner is copied; the words are ours.
+        Asking for one also asks the analysis about typography.</div></div>
   </div>
   <div class="row end" style="margin-top:18px">
     <button type="button" onclick="newDlg.close()">Cancel</button>
@@ -232,6 +261,52 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
   <div class="row end" style="margin-top:18px">
     <button type="button" onclick="devDlg.close()">Cancel</button>
     <button type="button" class="primary" id="devGo">Create</button>
+  </div>
+</form></dialog>
+
+<dialog id="wvDlg"><form method="dialog">
+  <h3 style="margin:0 0 6px">Accept and ship</h3>
+  <p class="muted" style="margin:0 0 14px;font-size:12px">The verdict is kept,
+    not deleted: preflight still reports the check as failed, and the finding
+    travels into the delivered manifest. Per scene — there is no accept-all.</p>
+  <div id="wvErr"></div>
+  <div><label>Which shots</label>
+    <div id="wvScenes" class="row" style="flex-wrap:wrap;gap:10px"></div></div>
+  <div style="margin-top:12px"><label>Why it ships anyway</label>
+    <input id="wvNote" placeholder="what you looked at, and why it is acceptable"></div>
+  <div class="row end" style="margin-top:18px">
+    <button type="button" onclick="wvDlg.close()">Cancel</button>
+    <button type="button" class="primary" id="wvGo">Accept</button>
+  </div>
+</form></dialog>
+
+<dialog id="drvDlg"><form method="dialog" id="drvForm">
+  <h3 style="margin:0 0 6px">Put shots on a motion driver</h3>
+  <p class="muted" style="margin:0 0 14px;font-size:12px">A slice of someone
+    else&rsquo;s creative. Its motion, timing and camera are transferred onto our
+    photograph. The driver&rsquo;s own soundtrack never reaches the final.</p>
+  <div id="drvErr"></div>
+  <div><label>Driver video</label>
+    <div class="drop" id="drvDrop" style="padding:18px">
+      <div class="big">Drop the cut you want the movement from</div>
+      <div class="hint">or click to choose &middot; mp4 or mov</div>
+    </div>
+    <input type="file" id="drvInput" accept="video/*" style="display:none"></div>
+  <div class="formgrid" style="margin-top:12px">
+    <div><label>Engine</label><select id="drvEngine">
+      <option value="seedance">Seedance video reference — 4-15s, the shot may speak</option>
+      <option value="kling-mc-3.0">Kling Motion Control 3.0 — runs as long as the driver, silent</option>
+      <option value="kling-mc-2.6">Kling Motion Control 2.6 — runs as long as the driver, silent</option>
+    </select></div>
+    <div><label>Note (optional)</label><input id="drvNote"
+      placeholder="what this movement is"></div>
+  </div>
+  <div class="hint" id="drvEngineNote" style="margin-top:6px"></div>
+  <div style="margin-top:12px"><label>Which shots ride it</label>
+    <div id="drvScenes" class="row" style="flex-wrap:wrap;gap:10px"></div></div>
+  <div class="row end" style="margin-top:18px">
+    <button type="button" onclick="drvDlg.close()">Cancel</button>
+    <button type="button" class="primary" id="drvGo">Attach</button>
   </div>
 </form></dialog>
 
@@ -289,7 +364,38 @@ function pillClass(s,gateReady){
   if(STATE&&STATE.terminal.includes(s))return '';
   return 'run';
 }
+// Keys arrive with the producer. Nothing here ever shows a VALUE -- the page is
+// told which providers answered and nothing else, because a key that never
+// reaches the browser cannot be copied out of it.
+function renderKit(){
+  const bar=$('#kitBar'), k=(STATE.options&&STATE.options.keys)||{};
+  if(!bar) return;
+  const have=k.providers||[];
+  bar.innerHTML = have.length
+    ? `<div class="muted" style="padding:8px 14px;font-size:11px;
+        border-bottom:1px solid var(--line)">keys: ${have.map(esc).join(', ')}
+        <span style="opacity:.6">${k.source?'· '+esc(k.source):''}</span>
+        <a href="#" onclick="kitInput.click();return false" style="margin-left:6px">replace</a></div>`
+    : `<div class="err" style="margin:10px 12px">
+        <b>No API keys.</b> Nothing can be generated until a kit is loaded.
+        <div style="margin-top:8px"><button onclick="kitInput.click()">Load a kit…</button></div>
+        <div class="muted" style="font-size:11px;margin-top:6px">A JSON file of keys.
+        It is read into this process and never written to disk — restart and it is gone.</div></div>`;
+}
+$('#kitInput').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
+  try{
+    const r=await api('/api/kit',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:await f.text()});
+    await refresh();
+    alert('Keys loaded for: '+r.providers.join(', ')
+      +'\nHeld in memory only — a restart clears them.');
+  }catch(err){ alert('That kit was refused:\n\n'+err.message); }
+};
+
 function renderSide(){
+  renderKit();
   $('#workerline').textContent = STATE.busy ? ('working on '+STATE.busy) : 'idle';
   $('#joblist').innerHTML = STATE.jobs.map(j=>`
     <div class="jobcard ${j.id===CUR?'sel':''}" onclick="select('${j.id}')">
@@ -321,18 +427,29 @@ function qaBadge(q){
   return `<span class="qa ${esc(q.severity)}">${esc(q.severity)}${extra}</span>`;
 }
 function sceneCard(s,kind){
+  // A transformation is TWO photographs of one shot. Showing only the first
+  // hides half of what was bought, and the half that decides whether the morph
+  // works is whether they are the same frame.
+  const pair = kind!=='clip' && s.plate && s.plate_end;
+  const plate = pair
+    ? `<img src="/media/${CUR}/${s.plate}" loading="lazy">`
+      +`<img src="/media/${CUR}/${s.plate_end}" loading="lazy">`
+    : (s.plate?`<img src="/media/${CUR}/${s.plate}" loading="lazy">`:'<span class="muted">—</span>');
   const media = kind==='clip'&&s.clip
     ? `<video src="/media/${CUR}/${s.clip}" muted preload="metadata"
         onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>`
-    : (s.plate?`<img src="/media/${CUR}/${s.plate}" loading="lazy">`:'<span class="muted">—</span>');
+    : plate;
   const qa = kind==='clip'?s.clip_qa:s.plate_qa;
   const tries = kind==='clip'?s.clip_attempts:s.plate_attempts;
   const prompt = kind==='clip'?s.video_prompt:s.image_prompt;
-  return `<div class="scene"><div class="media">${media}</div>
+  return `<div class="scene"><div class="media${pair?' pair':''}">${media}</div>
     <div class="meta"><div class="row" style="justify-content:space-between">
       <b>scene ${s.idx}</b><span>${qaBadge(qa)}</span></div>
       <div class="muted" style="font-size:11px;margin-top:3px">
-        ${s.duration_s}s · ${tries||0} attempt${tries===1?'':'s'}</div>
+        ${s.duration_s}s · ${tries||0} attempt${tries===1?'':'s'}
+        ${s.driver?` · <b style="color:var(--ink)">driver ${esc(s.driver)}</b>`:''}
+        ${s.plate_end?' · <b style="color:var(--ink)">transforms</b>':''}
+        ${(s.voice==='vo'&&s.line)?' · line spoken separately':''}</div>
       <div class="prompt">${esc((prompt||'').slice(0,150))}</div>
       ${qa&&qa.issues&&qa.issues.length?`<div class="prompt" style="color:var(--warn)">
         ${qa.issues.map(i=>esc(i)).join(' · ')}</div>`:''}
@@ -578,6 +695,83 @@ function editorCard(d){
     </div></div>`;
 }
 
+// What is stopping the delivery, and the two ways past it. Without this the
+// producer sees a gate they cannot approve and no way to act: AW024's remedy
+// lived entirely in the CLI, and the error naming it named a command `revise`
+// would not accept.
+function blockingCard(d){
+  const bad=d.blocking||[];
+  if(!bad.length) return '';
+  const at=STATE.gates.includes(d.state);
+  return `<div class="card"><h3>Blocking the delivery</h3>
+    ${bad.map(i=>{
+      const s=d.scenes.find(x=>x.idx===i)||{}, q=s.clip_qa||{};
+      return `<div style="margin-bottom:10px">
+        <b>scene ${i}</b> <span class="qa critical">critical</span>
+        <div class="muted" style="font-size:12px;margin-top:3px">
+          ${(q.issues||[]).map(esc).join(' · ')||'no detail'}</div></div>`;
+    }).join('')}
+    ${at?`<div class="row" style="margin-top:12px">
+      <button ${d.busy?'disabled':''} onclick="openRevise()">Buy it again…</button>
+      <button ${d.busy?'disabled':''} onclick="openWaive()">Accept and ship…</button>
+    </div>
+    <div class="muted" style="font-size:11px;margin-top:8px">
+      A fault already in the STILL is not repaired by buying the animation
+      again — revise <b>plates</b>, not <b>clip</b>. Accepting keeps the finding
+      in the report and in the delivered manifest.</div>`
+    :'<div class="muted" style="font-size:12px">Run the job to reach the gate where this can be decided.</div>'}
+  </div>`;
+}
+
+// Movement has ONE source per shot. A driver is chosen before the plates are
+// bought, because the plate of a driven shot is generated as that driver's
+// opening frame -- deciding afterwards means re-buying it.
+function motionCard(d){
+  const drivers=(d.meta&&d.meta.drivers)||[];
+  const canAdd=d.state==='GATE_PLAN'&&d.scenes.length&&!d.busy;
+  if(!drivers.length&&!canAdd) return '';
+  const riders=id=>d.scenes.filter(s=>s.driver===id).map(s=>s.idx);
+  return `<div class="card"><h3>Motion drivers</h3>
+    ${drivers.length?`<div class="grid" style="gap:10px">${drivers.map(v=>{
+      const on=riders(v.id);
+      return `<div class="row" style="justify-content:space-between;gap:12px">
+        <div><b>${esc(v.id)}</b> <span class="muted">${v.duration_s}s ·
+          ${esc(v.engine)}${v.note?' · '+esc(v.note):''}</span>
+          <div class="muted" style="font-size:11px;margin-top:2px">from ${esc(v.source)}</div></div>
+        <div class="muted" style="font-size:12px">${on.length
+          ? 'shot'+(on.length>1?'s':'')+' '+on.join(', ')
+          : '<span style="color:var(--warn)">attached to nothing</span>'}</div>
+      </div>`; }).join('')}</div>`
+    :'<div class="muted" style="font-size:12px">None. Every shot moves on its own.</div>'}
+    ${canAdd?`<div style="margin-top:12px"><button onclick="openDriver()">Add a driver…</button>
+      <span class="muted" style="font-size:11px;margin-left:8px">before the plates are bought:
+      a driven shot&rsquo;s plate IS the driver&rsquo;s opening frame</span></div>`:''}
+  </div>`;
+}
+
+// Banner mode. The one number that matters is the survival check -- everything
+// printed on the banner was approved by a client.
+function bannerCard(d){
+  const b=(d.meta&&d.meta.banner)||null;
+  if(!b) return '';
+  const sv=b.survived;
+  const src=b.source?`/media/${CUR}/${b.source}`:'';
+  return `<div class="card"><h3>Banner</h3>
+    <div class="row" style="gap:16px;align-items:flex-start">
+      ${src?`<img src="${src}" style="max-width:170px;border-radius:6px">`:''}
+      <div class="muted" style="font-size:12px">
+        <div>${b.width}&times;${b.height} · ${b.needs_expansion
+          ? `${b.placement.top}px painted above, ${b.placement.bottom}px below`
+          : 'already vertical — nothing expanded'}</div>
+        ${sv?`<div style="margin-top:8px;color:${sv.intact?'var(--ok)':'var(--bad)'}">
+          <b>${sv.intact?'the banner survived':'THE BANNER WAS CHANGED'}</b> —
+          ${sv.changed_pixels} changed pixel(s) inside it, ${sv.allowed} allowed</div>`
+        :'<div style="margin-top:8px">not expanded yet</div>'}
+        <div style="margin-top:8px">Silent by construction: no analysis, no cast,
+          no voice, no subtitles.</div>
+      </div></div></div>`;
+}
+
 function renderMain(){
   const d=DETAIL, atGate=STATE.gates.includes(d.state);
   const f=d.next_forecast;
@@ -588,6 +782,7 @@ function renderMain(){
       <div class="muted" style="margin-top:5px">${esc(d.intake.vertical||'')} ·
         week ${esc(d.intake.week)} · c-${esc(d.intake.concept)} ·
         pr-${esc(d.intake.producer||'lp')}
+        ${d.intake.ref_kind==='replica'?' · <b style="color:var(--ink)">replica</b>':''}
         ${d.intake.packshot?' · packshot '+esc(d.intake.packshot):''}
         ${(d.edit&&d.edit.music)?' · music '+esc(d.edit.music):''}</div></div>
     <div style="text-align:right"><div class="money">${fmt(d.spent)}</div>
@@ -602,7 +797,8 @@ function renderMain(){
   if((d.derivatives||[]).length) html+=`<div class="card" style="padding:10px 14px">
     <span class="muted" style="font-size:12px">variations:
     ${d.derivatives.map(v=>`<a href="#" onclick="select('${esc(v)}');return false">${esc(v)}</a>`).join(', ')}</span></div>`;
-  if(d.error) html+=`<div class="err"><b>failed:</b> ${esc(d.error)}</div>`;
+  if(d.error) html+=`<div class="err"><b>${STATE.gates.includes(d.state)
+    ?'blocked, and back at this gate:':'failed:'}</b> ${esc(d.error)}</div>`;
   // an action can fail WITHOUT changing job state -- approving off a gate, a bad
   // revise target. Those were recorded by the API and shown nowhere.
   const mine=(STATE.activity||[]).filter(a=>a.job_id===d.id);
@@ -656,6 +852,9 @@ function renderMain(){
         · crossfade ${d.meta.draft.crossfade_s||0}s
         · ${d.meta.draft.music?('music '+esc(d.meta.draft.music)):'no music'}`:''}</div></div>`;
   }
+  html+=blockingCard(d);
+  html+=motionCard(d);
+  html+=bannerCard(d);
   html+=editorCard(d);
   if(d.scenes.length){
     html+=`<div class="card"><h3>Plates</h3><div class="grid scenes">
@@ -852,6 +1051,104 @@ function openApprove(){
 $('#okGo').onclick=async()=>{ const note=$('#okNote').value; okDlg.close();
   await act('approve',{note}); };
 
+function openWaive(){
+  $('#wvErr').innerHTML=''; $('#wvNote').value='';
+  $('#wvScenes').innerHTML=(DETAIL.blocking||[]).map(i=>{
+    const s=DETAIL.scenes.find(x=>x.idx===i)||{}, q=s.clip_qa||{};
+    return `<label class="tick" title="${esc((q.issues||[]).join('; '))}">
+      <input type="checkbox" class="wvScene" value="${i}"> scene ${i}</label>`;
+  }).join('');
+  wvDlg.showModal();
+}
+$('#wvGo').onclick=async()=>{
+  const scenes=[...document.querySelectorAll('.wvScene:checked')].map(c=>+c.value);
+  const note=$('#wvNote').value.trim();
+  if(!scenes.length){ $('#wvErr').innerHTML='<div class="err">Tick the shots you accept.</div>'; return; }
+  if(!note){ $('#wvErr').innerHTML='<div class="err">A reason is required — it ships with the creative.</div>'; return; }
+  try{
+    await act('waive',{scenes,note});
+    wvDlg.close();
+  }catch(e){ $('#wvErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+};
+
+let DRV=null;
+function openDriver(){
+  DRV=null;
+  $('#drvErr').innerHTML=''; $('#drvNote').value=''; $('#drvEngine').value='seedance';
+  $('#drvDrop').classList.remove('has');
+  $('#drvDrop').innerHTML=`<div class="big">Drop the cut you want the movement from</div>
+    <div class="hint">or click to choose &middot; mp4 or mov</div>`;
+  $('#drvScenes').innerHTML=DETAIL.scenes.map(s=>
+    `<label class="tick">
+      <input type="checkbox" class="drvScene" value="${s.idx}">
+      shot ${s.idx} <span class="muted">${s.duration_s}s</span></label>`).join('');
+  drvEngineNote();
+  drvDlg.showModal();
+}
+// What choosing the engine COSTS, said where it is chosen. Motion Control runs
+// for exactly as long as the driver and takes no duration at all, so the plan's
+// clamp does not apply -- their tool let a 23s driver quietly become a 15s clip.
+function drvEngineNote(){
+  const mc=$('#drvEngine').value.startsWith('kling-mc');
+  const secs=DRV?DRV.duration_s:null;
+  $('#drvEngineNote').innerHTML=mc
+    ? 'Motion Control: each shot becomes '
+      +(secs?`<b>${secs}s</b>`:'exactly as long as the driver')
+      +' — the plan&rsquo;s length is overwritten — and is generated SILENT. '
+      +'Any line it had is spoken separately and laid over the clip.'
+    : 'Seedance video reference: the shot keeps its planned length (4-15s) and may speak.';
+}
+$('#drvEngine').addEventListener('change',drvEngineNote);
+function uploadDriver(file){
+  if(!file) return;
+  const d=$('#drvDrop');
+  d.innerHTML='<div class="big">Uploading…</div>';
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST','/api/uploads');
+  xhr.setRequestHeader('X-Filename',file.name);
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.upload.onprogress=e=>{ if(e.lengthComputable)
+    d.innerHTML=`<div class="big">Uploading…</div><div class="hint">${Math.round(e.loaded/e.total*100)}%</div>`; };
+  xhr.onload=()=>{
+    let r={}; try{ r=JSON.parse(xhr.responseText); }catch(e){}
+    if(xhr.status>=400||r.error||r.kind!=='reference'){
+      DRV=null;
+      d.innerHTML='<div class="big">Drop the cut you want the movement from</div>'
+        +'<div class="hint">or click to choose &middot; mp4 or mov</div>';
+      $('#drvErr').innerHTML=`<div class="err">${esc(r.error
+        ||(r.kind==='banner'?'that is an image — a driver is a video':'upload failed'))}</div>`;
+      return;
+    }
+    DRV=r; $('#drvErr').innerHTML=''; d.classList.add('has');
+    d.innerHTML=`<div class="big">${esc(r.name)}</div>
+      <div class="hint">${r.duration_s}s &middot; ${r.width}&times;${r.height}</div>`;
+    drvEngineNote();
+  };
+  xhr.onerror=()=>{ $('#drvErr').innerHTML='<div class="err">upload failed</div>'; };
+  xhr.send(file);
+}
+(function(){
+  const d=$('#drvDrop'), input=$('#drvInput');
+  d.onclick=()=>input.click();
+  input.onchange=()=>{ uploadDriver(input.files[0]); input.value=''; };
+  ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('over');}));
+  d.addEventListener('drop',e=>uploadDriver(e.dataTransfer.files[0]));
+})();
+$('#drvGo').onclick=async()=>{
+  const scenes=[...document.querySelectorAll('.drvScene:checked')].map(c=>+c.value);
+  if(!DRV){ $('#drvErr').innerHTML='<div class="err">Drop a driver video first.</div>'; return; }
+  if(!scenes.length){ $('#drvErr').innerHTML='<div class="err">Tick at least one shot — '
+    +'a driver attached to nothing changes nothing.</div>'; return; }
+  try{
+    await api(`/api/jobs/${CUR}/driver`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:DRV.path,engine:$('#drvEngine').value,
+                           note:$('#drvNote').value,scenes})});
+    drvDlg.close(); await refresh();
+  }catch(e){ $('#drvErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+};
+
 function openRevise(){
   const d=DETAIL;
   $('#revHint').textContent=`At ${d.state}. Anything you send back re-runs forward and stops here again.`;
@@ -876,9 +1173,34 @@ let UPLOAD=null;
 function resetDrop(){
   UPLOAD=null;
   const d=$('#drop'); d.classList.remove('has','over');
-  d.innerHTML=`<div class="big">Drop the reference video here</div>
-    <div class="hint">or click to choose &middot; mp4, mov, m4v, webm, avi, mkv</div>
+  d.innerHTML=`<div class="big">Drop the reference video, or a client banner</div>
+    <div class="hint">or click to choose &middot; a VIDEO is analysed and re-created &middot;
+      an IMAGE is expanded to 9:16 and animated</div>
     <div class="bar" id="dropBar" style="display:none"><i></i></div>`;
+  showMode(null);
+}
+// Which pipeline this job will run, said BEFORE it is created. Their tool
+// toasts it for the same reason: the two modes look alike from the outside and
+// mixing them wastes a whole generation.
+function showMode(u){
+  const note=$('#modeNote'), ugc=$('#ugcOnly');
+  if(!note) return;
+  if(!u){ note.textContent=''; if(ugc) ugc.style.display=''; return; }
+  const banner=u.kind==='banner';
+  if(ugc) ugc.style.display=banner?'none':'';
+  if(!banner){
+    note.className='hint';
+    note.innerHTML='<b>UGC pipeline</b> — the reference is analysed, a plan is written, '
+      +'plates and shots are bought.';
+    return;
+  }
+  const e=u.expansion||{top:0,bottom:0};
+  note.className='hint';
+  note.innerHTML='<b>Banner mode</b> — '+(e.top||e.bottom
+      ? `${e.top}px will be painted above and ${e.bottom}px below, and the banner itself `
+        +'is held to zero changed pixels'
+      : 'already vertical, so nothing is expanded')
+    +'. No analysis, no cast, no voice: the clip is silent and the banner is the brief.';
 }
 function dropBusy(pct){
   const d=$('#drop');
@@ -887,13 +1209,19 @@ function dropBusy(pct){
     <div class="bar"><i style="width:${pct}%"></i></div>`;
 }
 function dropDone(u){
-  const mb=(u.size/1048576).toFixed(1);
+  // a banner is often well under a megabyte, and "0.0 MB" reads as broken
+  const mb=u.size>=1048576?(u.size/1048576).toFixed(1)+' MB'
+                          :Math.max(1,Math.round(u.size/1024))+' KB';
+  const facts=u.kind==='banner'
+    ? `${u.width}&times;${u.height} &middot; ${mb}`
+    : `${u.duration_s}s &middot; ${u.width}&times;${u.height} &middot; ${mb}`
+      +` &middot; ${u.has_audio?'has audio':'<span style="color:var(--warn)">no audio track</span>'}`;
   $('#drop').classList.add('has');
   $('#drop').innerHTML=`<div class="big">${esc(u.name)}</div>
-    <div class="hint">${u.duration_s}s &middot; ${u.width}&times;${u.height}
-      &middot; ${mb} MB &middot; ${u.has_audio?'has audio':'<span style="color:var(--warn)">no audio track</span>'}</div>
+    <div class="hint">${facts}</div>
     <div style="margin-top:9px"><button type="button" onclick="resetDrop()"
       style="padding:4px 10px;font-size:12px">Choose another</button></div>`;
+  showMode(u);
 }
 function uploadRef(file){
   if(!file) return;
@@ -978,11 +1306,27 @@ $('#newBtn').onclick=()=>{
   $('#f_vertical').innerHTML=o.verticals.map(v=>`<option>${esc(v)}</option>`).join('');
   VERTICAL_TOUCHED=false;
   $('#f_packshot').innerHTML='<option value="">none</option>'+o.packshots.map(p=>`<option${p==='formula'?' selected':''}>${esc(p)}</option>`).join('');
+  const RK={ugc:'UGC with people — we re-create the idea, not the frame',
+            replica:'Match the reference — reproduce its material, composition and finish 1:1'};
+  $('#f_refkind').innerHTML=(o.ref_kinds||['ugc']).map(k=>
+    `<option value="${esc(k)}"${k===(o.ref_kind_default||'ugc')?' selected':''}>${esc(RK[k]||k)}</option>`).join('');
+  refKindNote();
   $('#newErr').innerHTML='';
   $('#f_name').value=''; $('#f_brief').value=''; $('#nameRead').textContent='';
+  $('#f_morph').value=''; $('#f_card').value='';
   resetDrop();
   setTimeout(()=>$('#f_name').focus(),40);
 };
+// What choosing it COSTS and what it BUYS, said where it is chosen.
+function refKindNote(){
+  const el=$('#refKindNote'); if(!el) return;
+  el.innerHTML=$('#f_refkind').value==='replica'
+    ? 'Stills are cut from your reference and attached to every plate — the look '
+      +'is carried by a PICTURE, not by words. AW024 said "3D cartoon animation '
+      +'style" in every prompt and still came back photoreal.'
+    : 'The reference is a source of ideas; the frames are ours.';
+}
+$('#f_refkind').addEventListener('change',refKindNote);
 $('#f_name').addEventListener('input',readName);
 $('#f_vertical').addEventListener('change',()=>{ VERTICAL_TOUCHED=true; readName(); });
 $('#createBtn').onclick=async()=>{
@@ -992,11 +1336,16 @@ $('#createBtn').onclick=async()=>{
     return;
   }
   if(!UPLOAD){
-    $('#newErr').innerHTML='<div class="err">Drop a reference video first.</div>';
+    $('#newErr').innerHTML='<div class="err">Drop a reference video or a banner first.</div>';
     return;
   }
-  const fd=new FormData($('#newForm')), body={run:true,reference:UPLOAD.path};
-  fd.forEach((v,k)=>{ if(v!=='') body[k]=v; });
+  const fd=new FormData($('#newForm')), body={run:true};
+  const banner=UPLOAD.kind==='banner';
+  body[banner?'banner':'reference']=UPLOAD.path;
+  // Hidden is not the same as absent. A transformation typed before the banner
+  // was dropped would otherwise be carried into a job whose writer never reads
+  // it -- a setting the producer believes is in force and nothing consults.
+  fd.forEach((v,k)=>{ if(v!==''&&!(banner&&(k==='morph'||k==='text_card'||k==='ref_kind'))) body[k]=v; });
   try{
     const r=await api('/api/jobs',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

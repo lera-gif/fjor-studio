@@ -275,6 +275,79 @@ def mix_music(video: Path, music: Path, dest: Path, volume: float = 0.25,
     return dest
 
 
+# The colour a text card is generated on. Theirs, and the reason is worth
+# keeping: a card is keyed as an IMAGE, not as video -- a digital flat green is
+# far cleaner to key than a filmed one, and the fringe can be despilled properly.
+# Magenta is the fallback for when the reference's own lettering contains greens.
+CARD_KEYS = {"green": "0x00B140", "magenta": "0xFF00B1"}
+
+# How much of the bottom of the frame a text card must leave alone. The
+# disclaimer and the "Created with AI" badge live there, they are approved
+# compliance assets, and a card drawn over them is a card that cannot ship.
+CARD_CLEAR_BOTTOM = 0.15
+
+
+def key_text_card(card: Path, dest: Path, key: str = "green") -> Path:
+    """A generated text card, with its background removed.
+
+    `colorkey` rather than `chromakey`: the card is a flat digital colour in
+    RGB, which is exactly what colorkey compares, and despill cleans the halo
+    the letters pick up from it."""
+    if key not in CARD_KEYS:
+        raise AssembleError(f"'{key}' is not a card key colour "
+                            f"({', '.join(sorted(CARD_KEYS))})")
+    card, dest = Path(card), Path(dest)
+    # similarity 0.30 / blend 0.10: the flat colour goes entirely, the letter
+    # edges keep a soft alpha instead of a hard sawtooth
+    chain = (f"colorkey={CARD_KEYS[key]}:0.30:0.10,"
+             f"despill=type={'green' if key == 'green' else 'blue'}:mix=0.5:expand=0")
+    run([_bin("ffmpeg"), "-y", "-v", "error", "-i", str(card),
+         "-vf", chain, "-frames:v", "1", str(dest)],
+        f"keying the text card {card.name}")
+    if not dest.exists():
+        raise AssembleError(f"keying produced no file from {card.name}")
+    return dest
+
+
+def card_bottom_is_clear(card: Path, fraction: float = CARD_CLEAR_BOTTOM) -> bool:
+    """Is the bottom band of a keyed card actually empty?
+
+    Asked rather than assumed. The prompt tells the model to keep it clear, and
+    a prompt is not a guarantee -- the disclaimer goes there, and a card that
+    covers it is one nobody can ship."""
+    card = Path(card)
+    meta = [s for s in probe(card)["streams"] if s.get("width")][0]
+    h = int(meta["height"])
+    band = max(1, int(round(h * fraction)))
+    out = subprocess.run(
+        [_bin("ffmpeg"), "-v", "error", "-i", str(card),
+         "-vf", f"crop=iw:{band}:0:ih-{band},alphaextract",
+         "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+        capture_output=True)
+    if out.returncode != 0:
+        raise AssembleError(f"could not read the alpha of {card.name}")
+    return not any(b > 8 for b in out.stdout)
+
+
+def overlay_text_card(video: Path, card: Path, dest: Path,
+                      crf: int = 21, preset: str = "veryfast") -> Path:
+    """Lay a keyed card over the cut, full frame, 1:1.
+
+    Not scaled to fit and not cropped to its content: the card was generated at
+    the frame's own shape, so every block is already where it belongs. Cropping
+    it to the ink would move all of them."""
+    video, card, dest = Path(video), Path(card), Path(dest)
+    run([_bin("ffmpeg"), "-y", "-v", "error", "-i", str(video),
+         "-loop", "1", "-i", str(card),          # rule 10: a still needs -loop 1
+         "-filter_complex",
+         "[1:v]scale=iw:ih[card];[0:v][card]overlay=0:0:shortest=1[v]",
+         "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", preset,
+         "-crf", str(crf), "-pix_fmt", PIX_FMT, "-c:a", "copy",
+         "-movflags", "+faststart", str(dest)],
+        f"laying the text card over {video.name}")
+    return dest
+
+
 def concat(segments: Sequence[Path], dest: Path) -> Path:
     if not segments:
         raise AssembleError("concat: nothing to join")
@@ -336,7 +409,8 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
                 music: Optional[Path] = None,
                 music_volume: float = 0.25,
                 music_duck: bool = True,
-                clip_audio: Optional[Sequence[Optional[str]]] = None
+                clip_audio: Optional[Sequence[Optional[str]]] = None,
+                text_card: Optional[Path] = None
                 ) -> Dict[str, Any]:
     """clips -> [demo] -> [packshot], subtitles, then the compliance overlays.
 
@@ -407,6 +481,20 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
         if music:
             joined = mix_music(joined, Path(music), work / "mixed.mp4",
                                music_volume, music_duck, crf)
+        carded = None
+        # The card goes UNDER the compliance overlays and over everything else:
+        # the disclaimer and the badge stay the topmost thing in the frame, which
+        # is the whole reason the card is told to keep the bottom band clear.
+        if text_card:
+            keyed = key_text_card(Path(text_card), work / "card_keyed.png")
+            if not card_bottom_is_clear(keyed):
+                raise AssembleError(
+                    "the text card covers the bottom of the frame, where the "
+                    "disclaimer and the badge go. Regenerate it -- a card drawn "
+                    "over an approved compliance asset cannot ship.")
+            joined = overlay_text_card(joined, keyed, work / "carded.mp4",
+                                       crf, preset)
+            carded = Path(text_card).name
         burn_overlays(joined, dest, disclaimer, badge, badge_s, crf, preset)
         info = probe(dest)
         vs = next((s for s in info.get("streams") or []
@@ -424,6 +512,7 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
             "subtitle_lines": subtitle_count,
             "crossfade_s": crossfade_s,
             "music": Path(music).name if music else None,
+            "text_card": carded,
         }
     finally:
         shutil.rmtree(work, ignore_errors=True)

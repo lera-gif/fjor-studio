@@ -20,3 +20,8 @@ verticals:
   lymph_walking:    {prefix: LW,    folder: "LYMPH WALKING"}
   bp_walking:       {prefix: BPW,   folder: "BLOOD PRESSURE WALKING"}
   lymph_massage:    {prefix: LMM,   folder: "LYMPH MASSAGE"}
+  # Added with the colleague's v4 niches. BPR is not a name we chose: twenty
+  # creatives have already shipped under it into BACK PAIN RELIEF, and an id
+  # allocated against that folder has to agree with them.
+  back_pain:        {prefix: BPR,   folder: "BACK PAIN RELIEF"}
+  apostolic_walking: {prefix: APW,  folder: "APOSTOLIC WALKING"}

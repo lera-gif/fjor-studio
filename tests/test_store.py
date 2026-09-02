@@ -182,3 +182,27 @@ def test_a_round_trip_through_build_and_parse_agrees():
     d = naming.parse_name(built)
     assert (d["id"], d["week"], d["concept"], d["producer"]) == \
         ("MENY077", 35, "julia-week", "ag")
+
+
+# -- a secret that only stays secret while nobody errs is not kept ------------
+
+def test_a_config_never_prints_its_keys_however_it_is_printed(tmp_path):
+    """`Config` was a plain dataclass, so its generated repr carried every API
+    key. That is not a hypothetical: `job.error` is built by interpolating an
+    exception and is stored in job.json and shown on the dashboard, so any
+    traceback that touched a Config would have written the keys to disk. One
+    wrong argument in a throwaway script printed the lot on 2026-09-02."""
+    from fjor_studio.config import Config
+
+    secret = "SK-DO-NOT-LEAK-0123456789"
+    cfg = Config(home=tmp_path, auth={"kie": {"api_key": secret},
+                                      "openai": {"api_key": secret}})
+    for rendering in (repr(cfg), str(cfg), f"{cfg}", "%s" % (cfg,),
+                      str(ValueError(f"boom {cfg}")),
+                      repr({"cfg": cfg}), repr([cfg])):
+        assert secret not in rendering, rendering
+    # it still says enough to debug with
+    assert "kie" in repr(cfg) and "openai" in repr(cfg)
+    assert str(tmp_path) in repr(cfg)
+    # and the deliberate representation still redacts too
+    assert secret not in json.dumps(cfg.redacted())

@@ -35,6 +35,36 @@ class Submission:
 
 
 @dataclass
+class TextCard:
+    """The creative's text card: our offer, set the way the reference sets its.
+
+    It carries `submissions` for the same reason a Scene does -- a paid
+    generation has to survive a crash between submitting and collecting, and
+    something has to own the task id."""
+    file: Optional[str] = None
+    attempts: int = 0
+    submissions: List[Dict[str, Any]] = field(default_factory=list)
+
+    def record(self, sub) -> Any:
+        self.submissions.append(asdict(sub))
+        return sub
+
+    def finish(self, task_id: str, status: str, credits: Optional[float] = None,
+               url: Optional[str] = None, note: str = "") -> None:
+        for raw in self.submissions:
+            if raw.get("task_id") == task_id:
+                raw["status"] = status
+                if credits is not None:
+                    raw["credits"] = credits
+                if url:
+                    raw["url"] = url
+                if note:
+                    raw["note"] = note
+                return
+        raise KeyError(f"text card: no submission with task_id {task_id!r}")
+
+
+@dataclass
 class Character:
     """Someone who appears in more than one shot.
 
@@ -82,13 +112,20 @@ class Scene:
     line: str = ""
     vo_track: Optional[str] = None
     image_prompt: str = ""
+    # A transformation happens IN the shot: the video model is given two photos
+    # and morphs between them. Filled = this shot morphs.
+    end_image_prompt: str = ""
     video_prompt: str = ""
     duration_s: float = 5.0
+    # the motion driver this shot is animated from, if any (drivers.py)
+    driver: Optional[str] = None
     plate: Optional[str] = None       # job-relative path
+    plate_end: Optional[str] = None   # the AFTER frame of a transformation
     clip: Optional[str] = None
     plate_attempts: int = 0
     clip_attempts: int = 0
     plate_qa: Optional[Dict[str, Any]] = None
+    plate_end_qa: Optional[Dict[str, Any]] = None
     clip_qa: Optional[Dict[str, Any]] = None
     submissions: List[Dict[str, Any]] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -173,6 +210,14 @@ class Job:
                 self.cast[i] = raw
                 return
         self.cast.append(raw)
+
+    def text_card(self) -> "TextCard":
+        return TextCard(**(self.meta.get("text_card_state") or {}))
+
+    def put_text_card(self, card: "TextCard") -> None:
+        self.meta["text_card_state"] = asdict(card)
+        if card.file:
+            self.meta["text_card"] = card.file
 
     def anchors_for(self, scene: "Scene", limit: int = 2) -> List[str]:
         """Identity plates for the people in this shot, most-specific first.

@@ -139,3 +139,50 @@ spending: a validation 422 is a successful probe.
 **Keep the *same* field invalid in every request.** A duration sweep that included
 the legal values 4 and 15 submitted two real generations and cost 471 credits.
 The invalid field is the only thing between a probe and a paid job.
+
+---
+
+## Kling Motion Control on KIE (their r170–r234, ported 2026-08-31)
+
+**KIE's Motion Control is a proxy onto fal.** Their model page carries
+`"channel":"fal_request"` for both 3.0 and 2.6. This is the fact everything else
+follows from: fal's schema is what validates, fal's limits are what reject, and
+KIE's own documentation describes a contract that is not the one being enforced.
+
+The failure mode is expensive and identical every time: **KIE accepts the task
+and charges for it, then fal kills it on execution** and the poll returns
+`state: fail`, `failMsg: "Internal Error"`. Nothing says which field was wrong.
+
+- **`background_source` must never be sent.** It appears in KIE's OpenAPI
+  markdown and nowhere else — not in fal's schema, not in Kling's own API, not
+  in KIE's playground, not in their cURL example. A lone line of documentation
+  with no executable contract behind it. Background is steered through the
+  prompt, which is what Kling's Motion Control guide recommends anyway.
+- **`input_urls` and `video_urls` are arrays of exactly one** (`maxItems: 1`).
+- **No `duration`.** The clip runs as long as the driver does. This is why the
+  engine is chosen before the prompts are written: a 23s driver is no longer
+  silently cut to 15s.
+- `mode` is the RESOLUTION (720p), not a speed tier. `character_orientation` is
+  `video`.
+- Limits, all fal's: image ≤ 10 MB and ≤ 3850px on the long side, short side
+  **strictly greater** than 340px; driver ≤ 100 MB, mp4 or mov. The 3850px cap
+  is undocumented at KIE entirely. `KieBackend.motion_control_precheck` checks
+  every one of them before anything is submitted.
+- The image goes up base64 (KIE recommends ≤10 MB, and the encoding inflates the
+  body by a third); the driver goes up by the streaming endpoint.
+
+## Seedance: three shapes, and they do not mix
+
+Which fields are present IS the scenario. Mixing them is a guaranteed refusal,
+not a degraded result:
+
+| Scenario | Fields |
+|---|---|
+| plain | `first_frame_url` |
+| reference | `reference_image_urls` |
+| with a driver | `reference_image_urls` + `reference_video_urls` |
+| morph | `first_frame_url` + `last_frame_url`, and neither of the others |
+
+`first_frame_url` beside `reference_video_urls` is refused outright, so a driver
+forces the reference shape. `duration` is clamped 4–15s.
+

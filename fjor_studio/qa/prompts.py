@@ -106,11 +106,112 @@ Check these seven things.
 """ + _SHARED_TAIL
 
 
-def system_for(kind: str) -> str:
+# ---------------------------------------------------------------------------
+# Banner mode inverts two of the rules above, so it gets its own prompts rather
+# than an override appended to them. An override that argues with a numbered
+# rule three paragraphs earlier is a prompt competing with itself: on a banner
+# the burnt-in text IS the creative and the brand logo is the client's own, and
+# a checker told both "no text, no logos" and "except here" will flag them.
+
+_BANNER_TAIL = """
+=== DEFAULT TO MINOR ===
+
+Regenerating costs real money, and on a banner the generation is probabilistic:
+two to four attempts is normal and a bad take is re-run, not argued with. So
+flag what actually breaks the asset, not every imperfection.
+
+Mark CRITICAL only when an average viewer would notice within 1-2 seconds, or
+when it breaks the client's approved artwork.
+
+EXCEPTIONS -- these stay CRITICAL however subtle, because the banner was signed
+off by a client and any of them means we shipped something they did not approve:
+- a letter, word or typeface redrawn, re-set or re-spaced
+- the call-to-action button moved, resized or recoloured
+- any colour inside the original banner changed, including a coloured object
+  going grey
+- a visible seam, band or blur strip where the extension begins
+- a person or object left unfinished at the join
+
+=== OUTPUT ===
+
+Reply with ONE JSON object and nothing else. English. The SAME shape as every
+other verdict in this pipeline -- a banner-specific one would parse as
+`unclear`, which is read as "could not look" and passes silently. That happened
+on AW025: the first live banner plate was never actually judged.
+
+{"passed": true|false, "severity": "ok"|"minor"|"critical",
+ "dialogue_match": "unclear",
+ "issues": ["short description", "..."], "summary": "one sentence"}
+
+`passed` is false only when severity is "critical". `dialogue_match` is
+"unclear" here: a banner clip is silent, so there is no dialogue to match.
+"""
+
+SYSTEM_BANNER_PLATE_QA = """You are a QA checker for a client's advertising
+banner that has been expanded from its original shape to vertical 9:16. You
+receive the expanded image and the instruction it was expanded with.
+
+READ THIS FIRST, because it inverts the usual rules: the text, headline, button
+label and brand logo printed on this banner are INTENDED. They are the creative.
+Never flag them as burnt-in text or as a brand-logo risk. What you are looking
+for is whether they SURVIVED, and whether the new areas are honest.
+
+Check these six things.
+
+1. THE PRINTED ARTWORK SURVIVED -- every letter, the button and its label, the
+   logo and every graphic sit exactly where they were, at the same size, in the
+   same typeface and the same colours, and are sharp and legible. Critical for a
+   redrawn or re-set typeface, a moved or resized button, or any colour change.
+2. NO SEAM -- there is no band, line, brightness step or colour step across the
+   frame where the extension begins, and no blurred, stretched or mirrored strip
+   standing in for painted content. Critical: this is the commonest failure of
+   this pipeline.
+3. WHAT THE EDGE CUT IS FINISHED -- any person or object that ran off the
+   original top or bottom edge is completed properly, in the same style and
+   lighting. Critical for a body that ends in a blur or stops mid-limb. A small
+   decorative object deliberately left cropped is NOT a fault.
+4. NO NEW TEXT -- no words, numbers, watermarks or logos that were not on the
+   original banner. Critical.
+5. NO DUPLICATES -- the logo, button or headline must not appear twice.
+6. NO MARKER LEFT -- no flat magenta anywhere in the frame. Critical.
+""" + _BANNER_TAIL
+
+SYSTEM_BANNER_CLIP_QA = """You are a QA checker for a short animated clip made
+from an expanded advertising banner. You receive the clip and the prompt it was
+made from.
+
+READ THIS FIRST: the text, button and logo baked into the frame are INTENDED --
+they are the client's approved creative. Never flag them as burnt-in text or as
+a brand risk. Your job is to check that they did not MOVE, and that the clip is
+alive.
+
+Check these six things.
+
+1. THE TEXT IS PIXEL-LOCKED -- every letter, the button and the logo stay
+   perfectly still and perfectly sharp for the whole clip. Critical for text
+   that shimmers, warps, ripples, drifts, re-renders, changes wording or goes
+   soft, even briefly.
+2. NOTHING NEW ENTERS -- no hands, no new objects, no new text, no cut, no scene
+   change, no angle change. Critical.
+3. THE CAMERA OBEYS THE PROMPT -- if the prompt calls the shot locked off, any
+   push-in, zoom, pan, tilt or drift is critical.
+4. IT IS NOT FROZEN -- something actually moves, and at least one movement is in
+   the MIDDLE of the frame rather than only at the top and bottom. A 4:5 crop is
+   taken from the middle and ships as its own deliverable, so a clip that only
+   moves in the margins delivers one live video and one still. Critical when
+   nothing in the middle moves at all.
+5. THE MOTION IS HONEST -- it is small, physically plausible, and moves with its
+   own shadow. Minor for a slightly odd amplitude; critical for an object
+   deforming, melting or sliding without its shadow.
+6. SILENT -- no speech and no lip movement.
+""" + _BANNER_TAIL
+
+
+def system_for(kind: str, banner: bool = False) -> str:
     if kind == "plate":
-        return SYSTEM_PLATE_QA
+        return SYSTEM_BANNER_PLATE_QA if banner else SYSTEM_PLATE_QA
     if kind == "clip":
-        return SYSTEM_CLIP_QA
+        return SYSTEM_BANNER_CLIP_QA if banner else SYSTEM_CLIP_QA
     raise ValueError(f"no QA system prompt for kind {kind!r}")
 
 
@@ -118,5 +219,5 @@ def user_for(kind: str, prompt: str) -> str:
     what = "photograph" if kind == "plate" else "video clip"
     return (f"Here is the {what} and the prompt it was generated from.\n\n"
             f"=== PROMPT ===\n{prompt}\n\n"
-            f"=== TASK ===\nCheck it against the seven rules in your system "
+            f"=== TASK ===\nCheck it against the rules in your system "
             f"instruction. Default to minor. Reply with the JSON object only.")

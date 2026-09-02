@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from fjor_studio.assemble import (SIZES, AssembleError, build_final, concat,
+from fjor_studio.assemble import (SIZES, AssembleError, build_final, concat, duration_of,
                                   disclaimer_for, has_audio, list_packshots,
                                   packshot_for, probe)
 
@@ -285,3 +285,65 @@ def test_a_bed_in_the_trash_folder_cannot_be_chosen(tmp_path):
     assert list_music(a) == ["Calm/Kyoto"]
     assert music_for(a, "Call Me Maybe") is None
     assert music_for(a, "_to_delete/Call Me Maybe") is None
+
+
+# -- text cards: our offer in the reference's typography ---------------------
+
+def a_card(tmp_path, name="card.png", text="28 DAYS", y="300", size=1080, h=1350):
+    """A generated card looks like this: flat key colour, our words on top."""
+    from fjor_studio.assemble import ffmpeg_with_libass
+    font = ASSETS / "fonts" / "Inter-Bold.ttf"
+    out = tmp_path / name
+    subprocess.run([ffmpeg_with_libass(), "-y", "-v", "error", "-f", "lavfi",
+                    "-i", f"color=c=0x00B140:size={size}x{h}",
+                    "-vf", f"drawtext=fontfile={font}:text='{text}':fontcolor=white:"
+                           f"fontsize=120:x=(w-tw)/2:y={y}:borderw=8:bordercolor=black",
+                    "-frames:v", "1", str(out)], check=True, capture_output=True)
+    return out
+
+
+def test_a_card_keys_to_alpha_and_keeps_its_letters(tmp_path):
+    """Keyed as an IMAGE, not as video: a flat digital colour is far cleaner to
+    key than a filmed one, and despill takes the halo off the letters."""
+    from fjor_studio.assemble import key_text_card, probe
+    keyed = key_text_card(a_card(tmp_path), tmp_path / "keyed.png")
+    stream = [s for s in probe(keyed)["streams"] if s.get("width")][0]
+    assert "a" in stream["pix_fmt"], "the key produced no alpha channel"
+    # the letters survived: something is still opaque
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(keyed), "-vf", "alphaextract",
+         "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+        capture_output=True, check=True).stdout
+    assert any(b > 200 for b in raw), "the card keyed away entirely"
+
+
+def test_the_bottom_of_a_card_is_checked_not_assumed(tmp_path):
+    """The disclaimer and the badge live in the bottom band. They are approved
+    compliance assets and a card drawn over them cannot ship, so the rule is
+    verified rather than trusted to the prompt."""
+    from fjor_studio.assemble import card_bottom_is_clear, key_text_card
+    clean = key_text_card(a_card(tmp_path, "ok.png", y="300"), tmp_path / "k1.png")
+    over = key_text_card(a_card(tmp_path, "bad.png", "SMALL PRINT", y="h-120"),
+                         tmp_path / "k2.png")
+    assert card_bottom_is_clear(clean) is True
+    assert card_bottom_is_clear(over) is False
+
+
+def test_a_card_is_laid_over_the_cut_full_frame(tmp_path):
+    """Not scaled to fit, not cropped to its ink: the card was generated at the
+    frame's own shape, so every block is already where it belongs."""
+    from fjor_studio.assemble import key_text_card, overlay_text_card, probe
+    keyed = key_text_card(a_card(tmp_path), tmp_path / "keyed.png")
+    base = clip(tmp_path / "base.mp4", 2, w=1080, h=1350)
+    out = overlay_text_card(base, keyed, tmp_path / "carded.mp4",
+                            crf=34, preset="ultrafast")
+    v = [s for s in probe(out)["streams"] if s["codec_type"] == "video"][0]
+    assert (v["width"], v["height"]) == (1080, 1350)
+    assert v["pix_fmt"] == "yuv420p"          # rule 15 holds here too
+    assert duration_of(out) == pytest.approx(duration_of(base), abs=0.15)
+
+
+def test_an_unknown_key_colour_is_refused(tmp_path):
+    from fjor_studio.assemble import AssembleError, key_text_card
+    with pytest.raises(AssembleError):
+        key_text_card(a_card(tmp_path), tmp_path / "x.png", key="chartreuse")

@@ -163,3 +163,26 @@ def test_blocking_scenes_reads_stored_verdicts():
         {"idx": 3, "clip_qa": None},
     ]
     assert blocking_scenes(scenes, "clip_qa") == [0]
+
+
+def test_every_qa_prompt_asks_for_the_shape_the_parser_reads():
+    """AW025's first live banner plate came back `unclear` -- the banner prompts
+    asked for a `verdict` key and the parser reads `severity`, so the verdict was
+    never read and passed silently. A check that cannot be understood is a check
+    that cannot fail: rule 4, from a new direction."""
+    import json as _json
+
+    from fjor_studio.qa import parse
+    from fjor_studio.qa.prompts import system_for
+
+    for kind in ("plate", "clip"):
+        for banner in (False, True):
+            prompt = system_for(kind, banner=banner)
+            assert '"severity"' in prompt, (kind, banner)
+            assert '"passed"' in prompt, (kind, banner)
+            assert '"verdict"' not in prompt, (kind, banner)
+    # and the shape those prompts describe really does parse as critical
+    verdict = parse(_json.dumps({"passed": False, "severity": "critical",
+                                 "issues": ["a seam across the frame"],
+                                 "summary": "the join is visible"}))
+    assert verdict.severity == "critical" and verdict.passed is False

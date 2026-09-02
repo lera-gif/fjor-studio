@@ -151,8 +151,8 @@ def test_preflight_fails_a_final_that_would_not_parse(home, reference):
     job = engine.approve(job)
     (store.job_dir(job.id) / "finals" / "stray_export.mp4").write_text("x")
     from fjor_studio.stages import steps
-    from fjor_studio.gen.base import GenError
-    with pytest.raises(GenError, match="preflight failed"):
+    from fjor_studio.engine import Blocked
+    with pytest.raises(Blocked, match="preflight stopped"):
         steps.preflight(engine._ctx(store.load(job.id)))
     report = json.loads(
         (store.job_dir(job.id) / "review" / "preflight.json").read_text())
@@ -166,8 +166,8 @@ def test_preflight_fails_when_a_configured_size_is_missing(home, reference):
     for f in (store.job_dir(job.id) / "finals").glob("*1080x1350*"):
         f.unlink()
     from fjor_studio.stages import steps
-    from fjor_studio.gen.base import GenError
-    with pytest.raises(GenError, match="preflight failed"):
+    from fjor_studio.engine import Blocked
+    with pytest.raises(Blocked, match="preflight stopped"):
         steps.preflight(engine._ctx(store.load(job.id)))
 
 
@@ -221,3 +221,16 @@ def test_each_size_is_built_from_the_clips_not_cropped_from_the_master(home, ref
     # differ -- proof the 4:5 was assembled, not derived
     assert by_fmt["4:5"]["duration_s"] != by_fmt["9:16"]["duration_s"]
     assert by_fmt["4:5"]["segments"][-1]["source"].endswith("formula_45.mp4")
+
+
+def test_the_v4_niches_are_registered_with_the_prefixes_already_in_use():
+    """BPR was not ours to choose: twenty creatives had already shipped into
+    BACK PAIN RELIEF under it, and ids are allocated against that folder."""
+    import pathlib, yaml
+    cfg = yaml.safe_load(
+        (pathlib.Path(__file__).resolve().parents[1] / "config" / "verticals.yaml")
+        .read_text())["verticals"]
+    assert cfg["back_pain"] == {"prefix": "BPR", "folder": "BACK PAIN RELIEF"}
+    assert cfg["apostolic_walking"]["folder"] == "APOSTOLIC WALKING"
+    prefixes = [v["prefix"] for v in cfg.values()]
+    assert len(prefixes) == len(set(prefixes)), "two verticals share a prefix"

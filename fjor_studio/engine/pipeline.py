@@ -86,6 +86,13 @@ REVISABLE: Dict[str, Dict[str, str]] = {
         "motion": "clips",
         "voice": "voiceovers",
         "vo": "voiceovers",
+        # A defect baked into the STILL is not repaired by buying the animation
+        # again: the video model animates the plate it is given. AW024 drifted a
+        # character's body type in two plates, and re-buying those clips would
+        # have animated the same wrong stills at five times the price.
+        "plates": "plates",
+        "plate": "plates",
+        "photos": "plates",
     },
     # Everything here rewinds to a stage BEFORE the gate -- the draft is cut in
     # `assembly` and only then reviewed, so a caption fix is free (ffmpeg) while
@@ -102,6 +109,9 @@ REVISABLE: Dict[str, Dict[str, str]] = {
         "captions": "assembly",
         "subtitles": "assembly",
         "music": "assembly",
+        "plates": "plates",
+        "plate": "plates",
+        "photos": "plates",
     },
 }
 

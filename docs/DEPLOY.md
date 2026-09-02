@@ -77,6 +77,7 @@ to leave an absolute home path behind.
 ## 2. Configure it
 
 ```bash
+# Keys: prefer a KIT — see "Keys" below. auth.yaml still works:
 cp config/auth.yaml.example config/auth.yaml   # then fill in the keys
 export FJOR_STUDIO_HOME=/srv/fjor-studio       # where jobs/ and config/ live
 export FJOR_STUDIO_DELIVERY_ROOT=/mnt/creative/VIDEO
@@ -111,6 +112,115 @@ FJOR_STUDIO_BACKEND=mock ./.venv/bin/python -m fjor_studio.cli \
 
 The suite executes the pipeline rather than reading source, so a green run on a
 new machine means ffmpeg, the fonts and the assets are all genuinely working.
+
+---
+
+## 2a. Keys
+
+**Preferred: a kit.** A kit is a JSON file of API keys that a producer supplies
+at runtime. The studio reads it, holds it in the memory of one process, and
+never writes it anywhere — restart and the keys are gone with it.
+
+```bash
+# for one command
+./.venv/bin/python -m fjor_studio.cli --kit ~/keys/fjor_kit.json status LIPIL025
+# for a whole shell, including the dashboard
+export FJOR_STUDIO_KIT=~/keys/fjor_kit.json
+```
+
+On the dashboard, a bar at the top of the sidebar says which providers answered.
+With no keys it says so and offers **Load a kit…**; the file is read straight
+into the process and never touches the disk. The page is only ever told the
+provider NAMES — a key that never reaches the browser cannot be copied out of it.
+
+Two shapes are accepted:
+
+```json
+{ "kie": { "api_key": "…", "base_url": "https://api.kie.ai" },
+  "gemini": "…" }
+```
+
+…and the colleague's own `📤 Экспорт настроек` **settings-kit** export, read
+unchanged, so the file the team already passes around works as-is. Only its keys
+are read; its style library and settings are ignored, because a kit is
+credentials, not configuration.
+
+**Legacy: `config/auth.yaml`.** Still supported and still gitignored, and a kit
+overrides it. It is no longer what a new deployment is told to do: a file of
+live keys sitting in the working tree is a standing invitation — to a stray
+`git add -f`, to a backup, to a screen share, to a traceback that interpolates
+the wrong object. This studio printed all six of its keys that last way on
+2026-09-02. A key that is not on the disk cannot be printed off it.
+
+---
+
+## 2b. What it can make
+
+Four things beyond a straight UGC re-creation. All of them are chosen at
+**intake**, in the New-job dialog or on `cli new`, because each changes what the
+job buys and none can be added cheaply later.
+
+### The source decides the pipeline
+
+Drop a **video** and it is a reference: analysed, planned, re-created. Drop an
+**image** and it is a client banner: expanded to 9:16 without being altered,
+animated with micro-motion, and cut with the usual overlays. The dialog says
+which pipeline it is about to run, and for a banner how many pixels it will
+paint above and below, before anything is created. A job carrying both is
+refused at intake.
+
+Banner mode skips analysis, cast and voice entirely, and its clips are silent —
+so subtitles are off, because burning them would cover the client's own approved
+copy. The banner itself is held to **zero changed pixels**: it is composited
+back over the model's output, and then checked. The one licensed edit is the
+legal small print, which runs as its own pass over a named band.
+
+### Reference kind: UGC or replica
+
+For a video reference, `--ref-kind replica` (or the dropdown) means *reproduce
+this reference's own look* rather than re-create its idea. It asks the analysis
+about the material and finish, tells the writer to name the medium first, and —
+the part that actually works — **cuts three stills out of the reference and
+attaches them to every plate**, ranked above the prompt.
+
+That last part exists because words were not enough. A stylised 3D cartoon
+reference whose every prompt said "3D cartoon animation style" still came back
+photoreal and uncanny. A look is carried by a picture, the same way a face is.
+
+### Motion drivers
+
+A driver is a slice of someone else's video: its movement, timing and camera are
+transferred onto our photograph. Attach one at **GATE_PLAN** — the dashboard has
+a dialog there — because a driven shot's plate IS the driver's opening frame, so
+attaching later means re-buying it.
+
+Choosing **Kling Motion Control** overwrites the shot's length with the driver's
+and generates it silent; our line is spoken separately and laid over. Choosing
+**Seedance** keeps the planned 4–15s and the shot may speak.
+
+### Transformation, and a text card
+
+`--morph "what changes"` builds the creative around one shot where a person
+changes on camera with no cut: two plates are bought for that shot and the video
+model morphs between them. Both plates are shown side by side at the gate.
+
+`--text-card "our words"` sets our copy the way the reference sets its own —
+the manner is copied, the words are ours. It also asks the analysis about
+typography.
+
+### When a job stops
+
+Preflight will not deliver over a critical clip verdict. The job goes **back to
+GATE_DRAFT**, not to `failed`, and both routes out are on the page:
+
+- **Buy it again.** `revise <id> clip --scene N` re-buys the animation;
+  `revise <id> plates --scene N` re-buys the still first. Use *plates* when the
+  fault is already in the photograph — the video model can only animate what it
+  is given, so re-buying the clip reproduces the same fault at five times the
+  price.
+- **Accept and ship.** `waive <id> --scene N --note why`. The verdict is kept,
+  not deleted: preflight still reports the check as failed and the finding
+  travels into the delivered manifest.
 
 ---
 

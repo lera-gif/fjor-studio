@@ -73,3 +73,11 @@ characters:
   # Two faces is what an image model can hold. Beyond that the references start
   # competing and the result drifts toward an average of them.
   max_anchors: 2
+
+text_card:
+  # Our offer, set the way the reference sets its own text. Switched on per job
+  # by putting the words in intake `text_card`; this only says HOW it is keyed.
+  #
+  # green unless the reference's own lettering contains greens -- in which case
+  # the letters would key away with the background, and magenta is the escape.
+  key: green

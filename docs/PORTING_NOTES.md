@@ -118,3 +118,187 @@ deprecated in their state and are read on migration only — the live field is
 - **Concept tokens.** The `c-` value is free text today (`ugc`, `canu`,
   `julia-week`, `bootcamp`, `morph`…). If there is a fixed vocabulary, it should
   live in `delivery.yaml` and be validated at intake.
+
+---
+
+# The v4 port (their r170–r234), started 2026-08-31
+
+Source: `~/Downloads/Тула_для_команды/creative_pipeline.html` (58,525 lines, up
+from the 45,460 inventoried above) and the release notes beside it. The two that
+matter: `ЧТО_НОВОГО_4_КРАТКО.md` for this release, and `ЧТО_НОВОГО_3.md`, which
+carries the whole "Оживить баннер" playbook.
+
+All of it is on branch **`tool-v4-port`**. `main` is untouched. The tag
+**`before-tool-v4-port`** is the last commit before any of it:
+
+    git reset --hard before-tool-v4-port      # add `git clean -fd` for new files
+
+## Done
+
+| | |
+|---|---|
+| 720p on every video model | Their Pro/2.5/Motion Control billed ~2x for a 1080p source the final never used. |
+| Back Pain Relief, Apostolic Walking | BPR was already shipping into that folder; the prefix had to match. |
+| KIE Motion Control + morph call shapes | See PROVIDER_FACTS: KIE proxies MC onto fal, `background_source` is fatal, MC takes no duration. |
+| Motion drivers, end to end | Engine and length settled ON the driver; driven shots silent with the line spoken by us; plate as a start frame; 300-600 char prompts. |
+| Transformation (morph) | Two photographs of one frame; end frame generated FROM the start frame; both priced. |
+| Text card in the reference's style | Typography read on demand, card keyed as an image, bottom band checked before assembly. |
+
+## Not done, in the agreed order
+
+1. **Static → video, "Оживить баннер".** DONE, end to end on the mock —
+   `fjor_studio/banner.py`, `fjor_studio/stages/banner_steps.py`,
+   `tests/test_banner.py`, `tests/test_banner_mode.py`. Not yet run on a live
+   model or a real client banner.
+
+   Done:
+
+   - **The CANVAS expansion engine**, of their three the only verifiable one.
+     `build_canvas` composites the banner at true size on a 1080x1920 marker
+     frame in ffmpeg, so the model is asked to replace the marker and nothing
+     else; `banner_survived` crops the banner's own rectangle back out and
+     compares it with what went in. Verified against three edits their QA calls
+     critical: a recoloured headline, a button nudged 6px, the legal line
+     painted out.
+
+     NOTE the lesson in that check: it first AVERAGED the difference and all
+     three edits passed, because a local change is diluted across a million
+     pixels. It counts changed pixels over a threshold now (24; honest expansion
+     produces exactly zero). Do not "simplify" it back to a mean.
+
+   - **The licensed band.** The legal small print always goes, and that is an
+     edit INSIDE the banner — so it is a SECOND pass, over a band named in
+     advance (`SMALL_PRINT_BAND`, deliberately mean so it does not licence the
+     CTA button above it), with everything outside the band still held to zero.
+     A licensed pass that changed nothing in its band reports
+     `edit_applied: False`, because a skipped pass is otherwise identical to a
+     clean one. See BLUEPRINT §3.4g and rule 20.
+
+   - **The expansion prompt playbook**, adapted to the canvas. Half of their
+     playbook exists to stop a model re-laying-out a bare image (PRESERVE,
+     LAYOUT LOCK, "~420px each side"); on a canvas the geometry is settled in
+     ffmpeg before the model is called. What does not come free is the analysis,
+     so the division of labour changed: **the writer answers the four questions
+     (`ANALYSIS_QUESTIONS`), `expansion_prompt` builds the prompt.** A prompt
+     assembled from answers cannot have an unfilled bracket — which was one of
+     the two things their tool shouted about. Both tiers survive (short for a
+     flat background with nothing cut, full otherwise, FULL when unsure).
+
+   - **`check_prompt`**, which enforces their FIRST iron rule mechanically:
+     never name a colour outside quotes. They left it to the writer's
+     discipline; it is the rule that actually costs money (a named shade means a
+     seam band → critical QA → regeneration) and it is trivially checkable.
+     Quoted text is exempt, which is what makes it safe — a headline reading
+     "Black Friday" is printed on the banner and must be named exactly. Also
+     catches leftover placeholders, bloat, and an expansion prompt that never
+     names the marker.
+
+   - **The animation rules.** Same division of labour (`ANIMATION_QUESTIONS` →
+     `animation_prompt`). Two of their nine rules are marked "include this line
+     verbatim"; ours are INSERTED, not requested. Enforced: 1–2 movers on a
+     photograph and 2–4 tiny staggered events on a flat drawn banner (one mover
+     on a drawing leaves the clip dead); at least one mover inside the central
+     4:5 zone, or the 4:5 final ships frozen; anything carrying printed
+     lettering does not move at all; camera locked by default (theirs moved to a
+     slight push-in, but our frame has an expansion in it and a push-in
+     magnifies the newest pixels); 5–10s; silent; loop-friendly.
+
+   - **The wiring**, as a source mode. A banner job runs the SAME pipeline
+     states and stops at the SAME gates; `stages/banner_steps.py` holds the four
+     stages that differ and `steps.py` branches into them. Intake takes an
+     IMAGE and settles the geometry there (whether there is anything to expand
+     at all decides what the job costs, and after the gate is too late).
+     `analysis`, `cast_plates` and `voiceovers` do nothing. `plates` builds the
+     canvas, expands it, checks survival AND runs a banner-specific QA — two
+     checks because they see different things: `banner_survived` is exact but by
+     construction blind to everything outside the banner's rectangle, which is
+     where a seam or a half-drawn person would be. `clips` is unchanged: an
+     expanded frame is a plate like any other.
+   - **QA has its own prompts here, not an exception clause.** Our media QA
+     calls readable text a critical defect and a brand logo a legal risk; on a
+     banner both ARE the creative. An override appended to those numbered rules
+     would be a prompt arguing with itself.
+   - The mock backend learned `echo_images` — "the model returned its input
+     unchanged", which is what an edit-in-place model does. Without it no test
+     of a check that COMPARES a result with its input could fail honestly.
+
+   Still to do:
+
+   - **Restyle variations** ("beach / sporty / abstract"): same offer, same
+     words, different style and decor, each assembled as its own full final. In
+     their tool each variation re-renders the banner; the expansion itself is
+     cached once per banner and reused, and their r172 audit found three
+     parallel variations paying three times for it.
+   - **A dashboard route** for creating a banner job. It is CLI/engine only.
+   - Untried on real material: whether a real banner's small print sits inside
+     `SMALL_PRINT_BAND`.
+
+   **First live run, AW025, 2026-09-01 — failed at 36 cr, and worth every
+   credit.** Two findings:
+
+   1. `resolution: 1K` makes nano-banana-pro answer a 1080x1920 canvas with
+      768x1376, the same size both attempts, whatever the prompt asks. Their
+      tool sends identical parameters and never compares, so it never noticed.
+      We now buy the expansion at 2K (their notes price Banana Pro "$0.09 for
+      1-2K", so it is the same money) and, more importantly, no longer need the
+      provider to honour a size at all -- see below.
+   2. THE PLAYBOOK WAS THE WRONG PROMPT FOR THIS ENGINE. It was assembled into
+      2,361 characters of scene description and sent with the canvas, and the
+      model drew the scene: both attempts came back with the banner's dusk
+      photograph replaced, one by an orange sunset, one by an afternoon sky.
+      Their tool keeps the two engines apart deliberately -- the canvas gets a
+      short fixed fill instruction describing NO content, because the canvas
+      already shows the model what is there. `banner.ANALYSIS_QUESTIONS`,
+      `expansion_prompt` and `check_prompt` remain in the module as the ported
+      playbook for the bare-image engine we do not have; they are NOT wired.
+
+   What changed as a result: the canvas is sent `fill_prompt()` and nothing
+   else; the plan asks only about the animation; `same_picture` judges the raw
+   return at 32x32 (measured: honest 1.08-1.76, re-renders 15.66-65.88, limit
+   8); `recomposite` puts our own banner back over its rectangle so it is exact
+   by construction; and `banner_survived` then PROVES that, which is the only
+   job it can still do honestly. A brief edit is refused out loud in this mode,
+   because it would be painted and then overwritten.
+
+2. **ElevenLabs voice.** Not implemented at all — declared and routable only.
+   Prepared right after QA rather than at the end, paid once per text, never
+   silently absent.
+3. **Batch dubbing.** A bulk tool, not part of making a creative. Separable.
+4. **Dashboard UI** for drivers, morph, the card and banner mode. DONE.
+
+   - The New-job drop zone takes an image as well as a video and SAYS which
+     pipeline will run — for a banner, how many pixels will be painted above and
+     below. Their tool announces the same thing with a toast, because the two
+     modes look alike from the outside and mixing them wastes a generation.
+   - Transformation and text-card briefs are fields there, hidden (and dropped
+     from the request, not merely hidden) when the source is a banner.
+   - Drivers get a dialog at GATE_PLAN — the first moment the shot list exists
+     and the last before anything is bought. Choosing Motion Control says, where
+     it is chosen, that the shot's length is overwritten by the driver's and the
+     clip is generated silent.
+   - A transformation shows BOTH plates, side by side in a box twice as wide.
+     Showing only the first hides half of what was bought, and the half that
+     decides whether the morph works is whether they are the same frame.
+   - Banner jobs get a card with the survival verdict on it.
+
+   Note: drivers had NO user-facing entry point before this — `add_driver` and
+   `attach_driver` were engine methods with no CLI command and no UI. The
+   dashboard is now the only way in; a `fjor driver` command would be the
+   obvious next convenience.
+
+## Dropped on the owner's call
+
+- **Pronunciation** (curly braces, stressed syllable in caps, the ~120-word
+  dictionary). Owner, 2026-08-31: "we don't need it at all, it proved to be
+  useless" — consistent with the 2026-08-18 call on the phonetic dictionary.
+- **Their UI work** — collapsible panels, download buttons, timeline repeat.
+  Our dashboard is a different thing.
+
+## Not yet proven on real material
+
+Everything is tested against synthetic ffmpeg clips. Untried: fal's size limits
+on a real driver, first-frame extraction from real footage, and whether a
+driver's opening frame is usable as a plate template. Motion Control also has no
+measured rate, so a gate with driven shots forecasts them as unpriced — a floor,
+not a price. The owner has accepted that for now.
+

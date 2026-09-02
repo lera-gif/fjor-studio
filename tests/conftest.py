@@ -69,12 +69,20 @@ def write_config(home: Path, pipeline=None, models=None, delivery=None):
         yaml.safe_dump(merge(base_delivery, delivery)))
 
 
-def write_replies(home: Path, **replies):
+def write_replies(home: Path, echo_images: bool = False, echo_size=None,
+                  **replies):
     """Script the mock backend's text replies. Keys: analysis, text,
-    'qa:plate', 'qa:clip'. A list is consumed in order, last entry repeats."""
+    'qa:plate', 'qa:clip'. A list is consumed in order, last entry repeats.
+
+    `echo_images` makes an image call hand back the media it was given, which is
+    what an edit-in-place model does and the only way to exercise a check that
+    compares the result with its input. `echo_size` hands it back at that size
+    instead of the one it was given, which is what a real image model does."""
     cfg = home / "config"
     cfg.mkdir(parents=True, exist_ok=True)
-    (cfg / "auth.yaml").write_text(yaml.safe_dump({"mock": {"replies": replies}}))
+    (cfg / "auth.yaml").write_text(yaml.safe_dump(
+        {"mock": {"replies": replies, "echo_images": echo_images,
+                  "echo_size": list(echo_size) if echo_size else None}}))
 
 
 @pytest.fixture
@@ -108,3 +116,46 @@ def scene_plan(n=2, duration=5.0):
     return json.dumps({"scenes": [
         {"idx": i, "image_prompt": f"plate {i}", "video_prompt": f"motion {i}",
          "duration_s": duration} for i in range(n)]})
+
+
+def a_banner(path, w=1080, h=1080):
+    """A client banner: an offer, a button, and a line of legal small print.
+
+    Real drawn text rather than a coloured rectangle, because every check in
+    banner mode is about whether type survived, and type is the thing that
+    rescales badly."""
+    import subprocess
+    from fjor_studio.assemble import ffmpeg_with_libass
+    font = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Inter-Bold.ttf"
+    subprocess.run(
+        [ffmpeg_with_libass(), "-y", "-v", "error", "-f", "lavfi",
+         "-i", f"color=c=0x1B4F3A:size={w}x{h}", "-vf",
+         f"drawtext=fontfile={font}:text='LOSE THE SWELLING':fontcolor=white:"
+         f"fontsize=86:x=(w-tw)/2:y={int(h * 0.28)},"
+         f"drawbox=x={w // 2 - 200}:y={int(h * 0.52)}:w=400:h=110:color=0xFFC93C:t=fill,"
+         f"drawtext=fontfile={font}:text='GET THE PLAN':fontcolor=black:"
+         f"fontsize=44:x=(w-tw)/2:y={int(h * 0.55)},"
+         f"drawtext=fontfile={font}:text='Results vary. Not medical advice.':"
+         f"fontcolor=0xBBBBBB:fontsize=22:x=(w-tw)/2:y={int(h * 0.93)}",
+         "-frames:v", "1", str(path)], check=True, capture_output=True)
+    return path
+
+
+def banner_answers(**over):
+    """What the compact brain is expected to answer with."""
+    answers = {
+        "tier": "full",
+        "above": "the plain studio backdrop simply keeps going",
+        "below": "the tabletop surface continues: same texture detail, same "
+                 "grain, same depth of field and the same light direction",
+        "cut_off": "nothing is cut off",
+        "leave_cropped": "",
+        "preserve": ["LOSE THE SWELLING", "GET THE PLAN"],
+        "decor": "keep the new areas clean and empty",
+        "graphic": False,
+        "movers": ["the steam above the mug drifts upward and thins"],
+        "central": "the steam rises through the middle of the frame",
+        "frozen": "", "background": "", "seconds": 7,
+    }
+    answers.update(over)
+    return json.dumps(answers)

@@ -260,6 +260,207 @@ thing in their tool and the part with the most scar tissue.
 `is_speech_only()` returns **False** for an empty issue list on purpose: a
 verdict that failed while naming nothing is not evidence of anything.
 
+### 3.4e Movement comes from ONE place: the driver, or the two frames
+
+Two of their v4 features put motion somewhere other than the words, and they
+cannot be combined. A **motion driver** carries the movement, timing and camera
+of someone else's clip onto our photograph; a **transformation** hands the model
+two photographs of one frame and morphs between them. A shot asking for both
+describes nothing the API can make, and is refused before the clips are bought.
+
+What each one costs elsewhere:
+
+- A driven shot's PLATE is a starting frame, not a model shot. The driver's
+  opening frame goes in as a geometry template — same angle, shot size, hands,
+  and the same KIND of contact surface, because a body that starts from a bed
+  where the driver had a mat animates wrongly. Everything else is ours; the room
+  is rebuilt, never copied, and the actor is a different individual of the same
+  type even when nobody asked for a casting change.
+- A driven shot's PROMPT is 300-600 characters and says nothing about motion.
+  The video carries the movement and the photo carries the person; writing them
+  out again competes with them, and when a word disagrees with a pixel the shot
+  comes out wrong. Speech is the exception, always in full: neither asset
+  carries it.
+- A driven shot is generated SILENT and its line is spoken in `voiceovers`. The
+  driver carries a stranger talking, and Motion Control gives us no say over the
+  soundtrack.
+- A transformation's END frame is generated FROM the start frame, and judged
+  like any other plate. It is the same photograph after the change — anything
+  else that differs will be seen moving. The gate prices BOTH photographs.
+- Motion Control runs exactly as long as its driver and is given no duration at
+  all, so attaching one retimes the shot and the plan's 4-15s clamp does not
+  apply to it. Their tool decided length while writing prompts, which is how a
+  23-second driver became a 15-second clip.
+
+### 3.4f A text card copies the manner, never the words
+
+Their "text in the reference's style": read HOW the reference sets its type --
+typeface character, weight, case, fill and outline, the plate behind the words,
+the block layout down the frame -- and set OUR offer that way. The manner is
+copied; the words are ours.
+
+Three things make it work rather than merely run:
+
+- **Keyed as an IMAGE, not as video.** A flat digital colour keys far more
+  cleanly than a filmed one, and the halo the letters pick up is despilled
+  properly. Green, or magenta when the reference's own lettering has greens in
+  it and would key away with the background.
+- **Laid on full-frame, 1:1.** The card is generated at the frame's own shape,
+  so every block is already where it belongs; cropping it to its ink would move
+  all of them.
+- **The bottom band is CHECKED.** The disclaimer and the badge live there and
+  are approved compliance assets, so the card is keyed and its alpha read before
+  it is accepted. A card that reaches into that band is regenerated, and after
+  the attempts run out the job stops rather than shipping over a disclaimer.
+  Discovering it at assembly means discovering it after the clips are paid for.
+
+The analysis is only asked about typography when a card was asked for, and it is
+told never to describe the reference's own disclaimer or small print: ours goes
+on separately as an approved asset, and copying theirs is the one thing this
+must never feed forward.
+
+### 3.4g A banner is an asset, not a draft
+
+Their "Оживить баннер" takes a finished, client-approved banner, expands it to
+9:16, and animates it. Everything printed on it -- the offer, the button, the
+logo -- is a thing somebody signed off. An expansion that redraws a letter,
+shifts a button or shades a colour has not blemished the asset; it has destroyed
+it. So the mode is built around one question, asked mechanically.
+
+- **The canvas is built HERE.** Of their three expansion engines we took the
+  canvas one, and not because it is cheapest: it is the only one we can check.
+  We composite the banner onto a 1080x1920 marker frame in ffmpeg, so the
+  banner's own pixels are still the banner's own pixels when the model is
+  called, and afterwards we crop that same rectangle back out and compare it
+  with what went in. A model handed a bare image and asked to be careful leaves
+  nothing to compare against.
+- **Two questions, two statistics, and neither is the other's.** AW025
+  (2026-09-01) asked for a 1080x1920 canvas and got 768x1376 back, twice,
+  identically -- an image model answers with its own resolution bucket whatever
+  the prompt says. Nothing pixel-exact can be asked of a rescaled frame. So the
+  raw return is asked only the coarse question, at 32x32: IS THIS THE SAME
+  PICTURE? Then our own banner is composited back over its rectangle, and the
+  strict pixel check is asked of THAT -- where it works, and where it now proves
+  the restoration rather than hoping for it. The mean is right for the first
+  question and wrong for the second; that is not a contradiction, it is two
+  questions.
+- **A description handed to an editing model is an invitation to draw.** The
+  same job sent the four-question playbook -- 2,361 characters of scene
+  description -- along with the canvas, and both attempts came back with the
+  banner's photograph replaced. Their tool keeps two engines apart on purpose:
+  the canvas gets a short fixed "replace only the magenta" instruction that
+  describes no content at all, because the canvas already SHOWS the model
+  everything the description was trying to say. The playbook belongs to the
+  bare-image engine, which we do not have.
+- **The double must answer in ITS size, not ours.** Three paid failures on one
+  banner came of a mock that echoed images back at exactly the size it was
+  handed. Every fix looked green and then failed on real money, because no test
+  ever ran the stage against a provider that answers in its own resolution --
+  which every real one does. `write_replies(echo_size=...)` exists for that, and
+  the banner stage is walked end to end with it returning 1536x2752.
+- **A lesson learned at one call site is not learned.** The expansion was fixed
+  for the resolution bucket and the small-print pass, four lines below it in the
+  same function, was not -- and cost another paid run. Both calls now go through
+  the same shape: judge the picture, restore what was not licensed to change,
+  then verify.
+- **The check COUNTS changed pixels; it does not average them.** The mean was
+  the first thing tried, and a recoloured headline, a button nudged six pixels
+  and a deleted legal line all passed it -- a local edit is diluted across a
+  million pixels, under a tolerance codec noise already reaches. Rule 4 again,
+  arrived at from a third direction.
+- **The one licensed edit is a separate pass.** The legal small print always
+  goes, and erasing it is an edit INSIDE the banner. Folding it into the
+  expansion would mean the check could no longer tell a removed disclaimer from
+  a redrawn headline, so it runs afterwards, over a band named in advance, with
+  everything outside that band still held to zero. The band is deliberately
+  mean: a generous one licences the CTA button just above it.
+- **A licensed pass that changed nothing did not run.** It is otherwise
+  indistinguishable from a clean result, which is how a silently skipped step
+  reaches delivery.
+- **Never name a colour.** Their hardest-won prompt rule: a named shade makes
+  the model paint that shade instead of continuing the real edge pixels, and the
+  result is a seam band across the frame. Name the material. This is checked
+  mechanically rather than left to the writer's discipline -- quoted text is
+  exempt, which is what makes it safe to enforce, because a headline reading
+  "Black Friday" is printed on the banner and must be named exactly.
+- **The writer answers; we assemble.** Their tool asked a model to write the
+  prompt in prose and then searched the result for unfilled `[brackets]` and
+  bloat. Ours asks the four analysis questions and builds the prompt from the
+  answers, which cannot leave a bracket unfilled. The same holds for animation:
+  two of their nine rules are marked "include this line verbatim", and a rule
+  that depends on a model reproducing a sentence word for word holds until the
+  day it does not. Ours are inserted.
+- **At least one thing moves in the central 4:5 zone.** The 4:5 final is cropped
+  from the middle of the 9:16 and ships beside it. A clip whose only movement
+  lives in the expanded margins delivers one live video and one still.
+- **The mode runs the same states and stops at the same gates**, but three
+  stages do nothing: there is no reference to analyse, no cast to anchor, and no
+  line to speak. Their v4 gave banner mode its own compact brain deliberately --
+  the video instruction, the niche, the voice and the reference analysis are all
+  kept out, because none of them describes a banner and each competes with the
+  one asset that does. Subtitles are off for the same reason a banner clip is
+  silent, and burning them would cover the client's own approved copy anyway.
+- **QA gets a different checklist, not an exception clause.** Our media QA calls
+  readable text in frame a critical defect and a visible brand logo a legal
+  risk; on a banner both are the creative. An override appended to those rules
+  would be a prompt arguing with itself, so banner mode has its own prompts,
+  which ask instead whether the type survived, whether there is a seam, and
+  whether anything moves in the middle.
+
+### 3.4h A look is carried by a picture, and so is a body
+
+AW024 was a stylised 3D cartoon reference. The analysis said so, every image
+prompt opened with "3D cartoon animation style", and the creative came back
+photoreal and uncanny. The words were right and the words were not enough --
+which is 3.4c again, about style instead of identity.
+
+- **The producer declares the kind at INTAKE.** Their tool asks twice: what the
+  source is, and how to treat a video one (`UGC с людьми` / `Точная копия
+  кадра`). Ours infers the source from the file and asks the second question.
+  Their third source, `universal`, is a pipeline we do not have and is not
+  offered: a control that changes nothing is worse than no control.
+- **`replica` attaches STILLS, not adjectives.** Three frames are cut from the
+  reference itself and go to every plate above the prompt, saying that where the
+  words and the frames disagree about how this LOOKS, the frames win. They cost
+  nothing -- the file is already in the job -- and they are cut once and reused.
+  Spread across the reference, never from its opening, which is often a title
+  card or a hard cut.
+- **Body type is carried by the reference too**, and that rule is ported out of
+  their per-niche templates because the failure is not vertical-specific: a
+  plus-size woman in the reference is a plus-size woman in ours, at the same
+  level. AW024 drifted its lead slimmer in two plates and lost the "before" of
+  its own before-and-after. The drift is SILENT -- a slightly slimmer shot reads
+  as fine alone and breaks the story only when the two ends are seen together --
+  which is why it needs a rule rather than an eye.
+- **A QA prompt must ask for the shape the parser reads.** The banner prompts
+  asked for a `verdict` key while the parser reads `severity`, so every banner
+  verdict came back `unclear`, which means "could not look" and passes silently.
+  AW025's first live plate was never judged. Rule 4, from a fourth direction: a
+  check nobody can read is a check that cannot fail.
+
+### 3.5c A stop must leave the producer somewhere they can decide
+
+AW024 failed at preflight on three blocking clip verdicts, and its own error
+told the producer to run `revise ... clip --scene N`. `revise` accepts only a job
+sitting at a gate, and a failed job is not at one. The tool named a command it
+would refuse, at the moment 2,114 credits were riding on the answer.
+
+- **Blocked is not failed.** A stage whose remedy lives at an earlier gate
+  raises `Blocked(gate, why)`, and the job is put back at that gate with the
+  reason recorded. Every route the message names -- revise, waive, approve again
+  -- is then reachable. Only a gate the config cannot skip may be used as the
+  landing point, or the run would bounce straight back and loop.
+- **A defect in the STILL is not repaired by re-buying the animation.** The
+  video model animates the plate it is given. `GATE_CLIPS` and `GATE_DRAFT`
+  offered only `clip`, so the one honest fix for AW024's drifted body type was
+  unreachable and the reachable one would have bought the same fault again at
+  five times the price. Both gates now rewind to `plates`, which stops at
+  `GATE_PLATES` so the new still is seen before the clip is bought.
+- **Every route in an error message must exist where the message appears.** The
+  dashboard had no `waive` at all: the accept route lived only in the CLI, so a
+  producer on the page had no way past a block except to take the files off disk
+  by hand. Both routes are on the page now.
+
 ### 3.5b A blocking verdict can be accepted, never erased
 
 Preflight stops a delivery on a critical clip verdict, and sometimes the right
@@ -485,6 +686,8 @@ printed. `fjor-studio config` uses it.
 
 ```
 fjor_studio/
+  app.py               open_studio / new_job -- the one way in
+  ids.py               id allocation against the delivery tree
   engine/pipeline.py   states, gates, revision map          (~120 loc)
   engine/job.py        Job / Scene / Submission, ledger
   engine/store.py      one dir per job, atomic job.json
@@ -502,18 +705,24 @@ fjor_studio/
   dashboard/server.py  stdlib HTTP: state, actions, media
   dashboard/worker.py  one background queue, one job at a time
   dashboard/page.py    the single page
-  qa/prompts.py        the seven-rule plate and clip QA system prompts
+  qa/prompts.py        the plate and clip QA system prompts, UGC and banner
   naming.py            the final-filename convention: build and parse
   derive.py            a finished job as the start of the next one
   costs.py             measured rates, forecasts that admit ignorance
+  banner.py            the canvas, the survival check, the two playbooks
+  refkind.py           ugc or replica: what a reference IS, and its style frames
+  kit.py               keys the producer brings, held in memory, never written
+  drivers.py           motion drivers: engine, length, the writer's rules
   stages/paid.py       THE path through which money is spent
   stages/steps.py      one handler per state
+  stages/banner_steps.py  the four stages banner mode does differently
+  stages/registry.py   pipeline state -> handler
   preflight.py         checks that report whether they were able to look
   config.py            pipeline.yaml / models.yaml / auth.yaml
   cli.py               new / run / approve / revise / retry / status / config
 ```
 
-326 tests, all of which execute the code rather than inspecting it.
+531 tests, all of which execute the code rather than inspecting it.
 
 ---
 
@@ -568,7 +777,10 @@ for the API facts that were expensive to learn.
 3. A rate goes in `costs.RATES` only if it is traced to a real charge. Unpriced is
    an honest answer; an invented number is not.
 4. A check that could not look never reports all-clear.
-5. `auth.yaml` is never committed and never printed unredacted.
+5. `auth.yaml` is never committed and never printed unredacted, and no object
+   holding keys may rely on a default repr: `Config` redacts itself in every
+   rendering, because a repr is not asked for, it happens. Keys are better
+   supplied as a KIT the producer brings, held in memory and never written.
 6. Delivery never hard-deletes; a replaced file goes to `_to_delete/`.
 7. Ids are allocated against the delivery tree as well as the local jobs
    directory, and the filename convention is matched exactly.
@@ -593,9 +805,25 @@ for the API facts that were expensive to learn.
 16. A subtitle word holds until the next word or `MAX_HOLD_S`, whichever is
     sooner. Chain-linking across a silence leaves a word on screen for as long
     as the silence lasts.
-17. A QA verdict is accepted, never erased. `waive` is per-scene, needs a
+17. Movement has one source per shot. A driver and a transformation in the
+    same shot is refused before the clips are bought.
+18. A QA verdict is accepted, never erased. `waive` is per-scene, needs a
     reason, and leaves the finding in the report and the shipped manifest.
-18. Whatever a derived job inherits, it inherits WHOLE. The cast travels with
+19. Whatever a derived job inherits, it inherits WHOLE. The cast travels with
     the prompts that name it, or the child is unanchored and every plate
     invents a face. Nothing unanchorable is ever paid for. Whether the FACE
     travels is the producer's call, not a default.
+20. Register-and-attach is one action. A driver registered without shots is a
+    video copied into the job that changes nothing, and a plan gate approved
+    with the shots not yet retimed to the driver's length.
+21. A stop leaves the producer somewhere they can decide. A stage whose remedy
+    lives at a gate raises `Blocked` and the job lands there; every route an
+    error names is reachable from where the producer is standing, and offered
+    wherever that error is shown.
+22. The banner is RESTORED, not merely guarded. The model's return is judged
+    for being the same picture, our own banner is composited back over its
+    rectangle, and the strict pixel check then proves it. Nothing inside the
+    banner changes. The expansion is held to zero changed
+    pixels there; the one edit that is allowed -- the legal small print -- is a
+    separate pass over a band named in advance, and a licensed pass that changed
+    nothing in its band is reported as not having run.

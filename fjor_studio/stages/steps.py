@@ -11,10 +11,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import costs, naming
+from .. import costs, drivers, naming, refkind
+from . import banner_steps
 from ..assemble import (SIZES, AssembleError, build_final, disclaimer_for,
                         music_for, packshot_for)
-from ..engine.engine import StageContext
+from ..engine.engine import Blocked, StageContext
 from ..engine.job import Scene
 from ..gen.base import GenError
 from ..qa import (QaSettings, Verdict, apply_voice_context, blocking_scenes,
@@ -99,9 +100,10 @@ def _run_media_qa(ctx: StageContext, scene, kind: str,
         return None
     model = (ctx.config.models.get("models") or {}).get("qa", "")
     params = _options(ctx, "qa")
+    banner_mode = banner_steps.is_banner(ctx.job)
     params.update({"qa_kind": kind,
                    "scene": getattr(scene, "idx", getattr(scene, "id", None)),
-                   "system": system_for(kind)})
+                   "system": system_for(kind, banner=banner_mode)})
     try:
         result = ctx.providers.backend_for("analysis").generate(
             "analysis", model, user_for(kind, prompt),
@@ -167,6 +169,8 @@ def intake(ctx: StageContext) -> None:
     path outside it."""
     _check_delivery_root(ctx)
     _check_subtitle_prerequisites(ctx)
+    if banner_steps.is_banner(ctx.job):
+        return banner_steps.intake(ctx)
     src = ctx.job.intake.get("reference")
     if not src:
         raise GenError("intake: no reference video given "
@@ -207,14 +211,66 @@ Report, in plain prose:
 Reference kind: {ref_kind}. Pass {n} of {passes}."""
 
 
-def _analysis_brief(ref_kind: str, n: int, passes: int) -> str:
-    return ANALYSIS_BRIEF.format(ref_kind=ref_kind, n=n, passes=passes)
+TYPOGRAPHY_BRIEF = """
+
+8. TYPOGRAPHY -- HOW the on-screen text is set, not what it says. For each
+   distinct text block: where it sits in the frame, the typeface's character
+   (heavy grotesque / condensed / rounded / serif / handwritten), weight, case,
+   the fill colour, the outline colour and its thickness, any shadow or glow,
+   any plate or highlight behind the words, and the alignment. Describe the
+   BLOCK LAYOUT: how many blocks, their order down the frame, and roughly what
+   share of the height each occupies.
+
+   Do NOT describe the reference's legal disclaimer or its small print. Ours is
+   an approved asset that goes on separately, and copying theirs is the one
+   thing this analysis must never feed forward.
+"""
+
+
+REPLICA_BRIEF = """
+
+8. MATERIAL AND FINISH -- the producer asked to reproduce this reference's own
+   look, so describe the PICTURE ITSELF, not only its contents. What is it made
+   of: photographic footage, a 3D animated render, a hand-drawn illustration, a
+   screen recording, a diagram? How stylised is it -- name the manner, not just
+   the medium, because "3D" alone covers both a Pixar-like cartoon and a
+   photoreal render and they are not the same picture. Describe the finish:
+   texture, edge softness, palette, contrast, how people are proportioned and
+   stylised.
+
+9. WHAT IS NOT IN FRAME. Say plainly if there are no people, no text, no
+   product. Those are complete answers, and a replica that invents them has
+   stopped being one.
+"""
+
+
+def _analysis_brief(ref_kind: str, n: int, passes: int,
+                    typography: bool = False) -> str:
+    brief = ANALYSIS_BRIEF.format(ref_kind=ref_kind, n=n, passes=passes)
+    if ref_kind == "replica":
+        brief += REPLICA_BRIEF
+    return brief + TYPOGRAPHY_BRIEF if typography else brief
 
 
 def analysis(ctx: StageContext) -> None:
     """Step 2: whole-file video analysis, picture and audio together."""
+    if banner_steps.is_banner(ctx.job):
+        # Their v4 keeps the reference analysis, the niche and the voice OUT of
+        # banner mode on purpose. There is no reference to analyse, and every
+        # word of a video instruction competes with the one asset that matters.
+        ctx.job.analysis = {"skipped": "banner mode",
+                            "text": "", "passes": []}
+        ctx.job.add_event("analysis_skipped",
+                          "banner mode: nothing to analyse -- the banner IS the "
+                          "brief, and it goes to every call that needs it")
+        return
     depth = str(((ctx.config.pipeline or {}).get("analysis") or {}).get("depth", "default"))
-    ref_kind = str(((ctx.config.pipeline or {}).get("analysis") or {}).get("ref_kind", "ugc"))
+    # Per JOB, not per config: two references handed to the same studio on the
+    # same day can want different treatment, and the producer knows which at
+    # intake. The config value is the default they start from.
+    ref_kind = refkind.normalise(
+        ctx.job.intake.get("ref_kind")
+        or ((ctx.config.pipeline or {}).get("analysis") or {}).get("ref_kind", "ugc"))
     if depth not in ("default", "deep", "bulletproof"):
         raise GenError(f"analysis.depth '{depth}' is not one of "
                        f"default | deep | bulletproof")
@@ -226,7 +282,9 @@ def analysis(ctx: StageContext) -> None:
         params = _options(ctx, "analysis")
         params.update({"pass": n + 1, "ref_kind": ref_kind})
         result = ctx.providers.backend_for("analysis").generate(
-            "analysis", model, _analysis_brief(ref_kind, n + 1, passes),
+            "analysis", model,
+            _analysis_brief(ref_kind, n + 1, passes,
+                            typography=bool(_card_offer(ctx))),
             params=params, medias=[str(ref)])
         texts.append(result.text)
         if result.credits:
@@ -242,14 +300,19 @@ def analysis(ctx: StageContext) -> None:
 def prompts(ctx: StageContext) -> None:
     """Step 3: the text model turns the analysis into one image prompt and one
     video prompt per GEN block."""
+    if banner_steps.is_banner(ctx.job):
+        return banner_steps.plan(ctx)
     model = ctx.config.model_for("text")
     count = ctx.job.intake.get("scene_count")      # None = the reference decides
     params = _options(ctx, "text")
     params.update({"self_audit": bool(((ctx.config.pipeline or {}).get("prompts") or {})
                                       .get("self_audit", True)),
                    "scene_count": count})
+    brief = (_prompts_brief(ctx, count) + drivers.writer_block(ctx.job)
+             + _morph_block(ctx) + BODY_ANCHOR
+             + (refkind.WRITER_RULES if refkind.is_replica(ctx.job) else ""))
     result = ctx.providers.backend_for("text").generate(
-        "text", model, _prompts_brief(ctx, count), params=params)
+        "text", model, brief, params=params)
     if result.credits:
         ctx.job.spend("prompts", "prompt writing", result.credits, result.backend)
     scenes, notes = _parse_scene_plan(result.text, count or 5,
@@ -270,11 +333,19 @@ def prompts(ctx: StageContext) -> None:
         prior = existing.get(spec["idx"])
         scene = Scene(**prior) if prior else Scene(idx=spec["idx"])
         scene.image_prompt = spec["image_prompt"]
+        scene.end_image_prompt = str(spec.get("end_image_prompt") or "").strip()
         scene.video_prompt = spec["video_prompt"]
         scene.characters = list(spec.get("characters") or [])
         scene.voice = str(spec.get("voice", "on_camera"))
         scene.line = str(spec.get("line", ""))
         scene.duration_s = float(spec.get("duration_s", 5))
+        # LAST, and after the plan's own duration: a Motion Control shot is
+        # exactly as long as its driver, and a rewrite must not hand it back to
+        # the 4-15s clamp. That is the 23s-becomes-15s failure arriving by a
+        # different road.
+        driver = drivers.for_scene(ctx.job, scene)
+        if driver and drivers.is_motion_control(driver["engine"]):
+            scene.duration_s = driver["duration_s"]
         ctx.job.put_scene(scene)
     ctx.job.plan = {"scene_count": len(scenes), "text": result.text}
     _consume(ctx, "prompts")
@@ -391,6 +462,89 @@ def _duration_bounds(ctx: StageContext) -> Tuple[float, float]:
     return float(raw.get("min", 4)), float(raw.get("max", 15))
 
 
+CARD_BRIEF = """Draw a TEXT CARD: our words, set the way the reference sets its own.
+
+Read the TYPOGRAPHY section of the analysis below and reproduce its manner --
+the typeface character, weight, case, fill and outline colours, the outline
+thickness, any plate behind the words, the alignment, and the block layout down
+the frame. The MANNER is copied. The WORDS are ours and are below.
+
+Hard rules:
+
+1. The background is a FLAT, EVEN {key} and nothing else. No gradient, no
+   texture, no vignette, no shadow cast onto it. It is keyed away, and anything
+   uneven there survives as a fringe.
+2. Nothing at all in the BOTTOM {clear}% OF THE FRAME. Our disclaimer and the
+   "Created with AI" badge go there. A card that reaches into that band is
+   rejected and regenerated.
+3. Our words, exactly as written, and no others. No lorem, no invented offer,
+   no extra line, no logo, no legal small print. NEVER reproduce the
+   reference's disclaimer or any of its fine print.
+4. No people, no product, no photographic content. Type and its decoration only.
+5. {size} frame.
+
+OUR WORDS:
+{offer}
+"""
+
+
+def _card_offer(ctx: StageContext) -> str:
+    """What our card should say, or nothing when no card was asked for."""
+    return str(ctx.job.intake.get("text_card") or "").strip()
+
+
+def _card_key(ctx: StageContext) -> str:
+    """Green, unless the reference's own lettering has greens in it -- in which
+    case the letters would key away with the background."""
+    return str(((ctx.config.pipeline or {}).get("text_card") or {})
+               .get("key", "green"))
+
+
+MORPH_END_FRAME_RULE = """
+
+THIS IS THE END FRAME OF A TRANSFORMATION.
+
+The first image supplied is the START frame of this very shot. Reproduce it
+exactly -- the same person, the same pose, the same camera angle, crop and
+distance, the same wardrobe, the same room, the same light -- and change ONLY
+what the transformation calls for. The two frames are morphed into each other,
+so anything else that differs will be seen moving, and will read as a mistake.
+
+This is not a new scene, a new angle or a later moment. It is the same
+photograph, after the change.
+"""
+
+MORPH_RULES = """
+A TRANSFORMATION ON CAMERA — this creative changes a person in shot, with no cut.
+
+What changes: {what}
+
+The video model is given TWO photographs of the same shot and morphs between
+them. Exactly ONE shot carries the transformation, and you decide which: build
+the creative around it — the lead-in that makes the viewer want to see it, the
+change itself, and the reaction after. That is the creative, not a detail of it.
+
+For the shot that transforms, and only that one, add a second prompt field
+`end_image_prompt` beside `image_prompt`. Hard rules:
+
+1. `end_image_prompt` describes THE SAME FRAME as `image_prompt` — the same
+   person, pose, camera, crop, wardrobe, lighting and location — changed ONLY by
+   the transformation named above. The two are pixel-aligned; anything you
+   change in one you change in the other.
+2. It is an END FRAME, not another reference photo. Do not describe it as a new
+   scene, a new angle or a new moment.
+3. Every other shot has no `end_image_prompt` at all. One transformation per
+   creative.
+4. The transformation is what the words are about. Do not write the change into
+   the motion prompt as an action -- the two photographs perform it.
+"""
+
+
+def _morph_block(ctx: StageContext) -> str:
+    what = str(ctx.job.intake.get("morph") or "").strip()
+    return MORPH_RULES.format(what=what) if what else ""
+
+
 def _parse_cast(text: str, scenes: List[Dict[str, Any]]
                 ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """The declared cast, narrowed to who the scenes actually reference.
@@ -473,8 +627,19 @@ def _parse_scene_plan(text: str, fallback_count: int,
                                        for c in (s.get("characters") or [])
                                        if str(c).strip()],
                         "image_prompt": str(s.get("image_prompt", "")),
+                        "end_image_prompt": str(s.get("end_image_prompt", "")).strip(),
                         "video_prompt": str(s.get("video_prompt", "")),
                         "duration_s": fit(idx, s.get("duration_s", 5))})
+        morphing = [o["idx"] for o in out if o["end_image_prompt"]]
+        if len(morphing) > 1:
+            # A creative transforms once. Two would each cost an extra plate and
+            # neither would be the moment the script was built around.
+            notes.append(f"scenes {morphing} all carry an end frame; keeping "
+                         f"{morphing[0]} and dropping the rest -- a creative "
+                         f"transforms once")
+            for o in out:
+                if o["idx"] in morphing[1:]:
+                    o["end_image_prompt"] = ""
         if out:
             return out, notes
     except Exception:  # noqa: BLE001
@@ -497,6 +662,26 @@ def gate_plan(ctx: StageContext) -> None:
                         kind="image") for s in ctx.job.scenes]
     lines += [costs.line("plates", backend, image_model, kind="image")
               for _ in ctx.job.cast]
+    # a transformation is TWO photographs of one shot, and the gate that shows
+    # the money has to count the second one
+    lines += [costs.line("plates", backend, image_model, scene=s["idx"],
+                         kind="image")
+              for s in ctx.job.scenes if (s.get("end_image_prompt") or "").strip()]
+    if _card_offer(ctx):
+        lines.append(costs.line("plates", backend, image_model, kind="image"))
+    if banner_steps.is_banner(ctx.job):
+        # The one scene above is the expansion. Removing the legal small print
+        # is a SECOND image buy and it happens every time, so it is forecast;
+        # the retries are not, because they are conditional -- but a producer
+        # reading this number should know they exist.
+        if ctx.job.intake.get("remove_small_print", True):
+            lines.append(costs.line("plates", backend, image_model,
+                                    kind="image"))
+        ctx.job.add_event(
+            "banner_forecast",
+            f"a failed survival or QA check re-buys the expansion, up to "
+            f"{_qa_settings(ctx).plates_max_attempts} attempts. The forecast "
+            f"prices one.")
     f = costs.forecast(lines)
     ctx.job.forecasts["plates"] = f.as_dict()
     _write_review(ctx, "plan.json", {
@@ -508,6 +693,28 @@ def gate_plan(ctx: StageContext) -> None:
                     "duration_s": s["duration_s"]} for s in ctx.job.scenes],
         "plate_forecast": f.as_dict(),
     })
+
+
+BODY_ANCHOR = """
+
+BODY TYPE IS CARRIED BY THE REFERENCE, NOT BY A LABEL.
+
+Look at how heavy or slim each person actually IS in the reference and describe
+THAT degree, with concrete markers, in every prompt that person appears in. A
+plus-size woman in the reference is a plus-size woman in ours, at the SAME level
+-- not noticeably slimmer, not noticeably heavier. A slim expert stays slim.
+
+The picture outranks every other signal: a text label, a guess, or one line of
+dialogue. Where the analysis calls someone "plus-size / overweight / heavy-set /
+soft-medium", that is the reference reporting what it sees -- keep it, and never
+slim anyone toward a leaner house look.
+
+This is not a detail of the casting. The plus-size customer IS the audience: if
+she comes back slim, the viewer stops recognising herself and the ad dies. It is
+also the commonest way an image model drifts, and it drifts SILENTLY -- a shot
+where the same woman is a little slimmer reads as fine on its own and breaks the
+story only when the before and after are seen together.
+"""
 
 
 IDENTITY_ANCHOR = """IDENTITY ANCHOR — THIS OUTRANKS THE DESCRIPTION BELOW.
@@ -615,15 +822,45 @@ def cast_plates(ctx: StageContext) -> None:
             ctx.store.save(ctx.job)
 
 
+def _style_frames(ctx: StageContext) -> List[str]:
+    """Stills cut from the reference, for a job that asked to match its look.
+
+    Cut once and reused: they come out of a file already in the job, so this
+    costs nothing but a few seconds of ffmpeg, and cutting them again on a
+    re-run would only churn the disk."""
+    if not refkind.is_replica(ctx.job):
+        return []
+    rel = ctx.job.meta.get("style_frames")
+    if rel and all((ctx.job_dir / r).exists() for r in rel):
+        return [str(ctx.job_dir / r) for r in rel]
+    from ..assemble import duration_of
+    ref = ctx.job_dir / ctx.job.intake["reference_local"]
+    frames = refkind.cut_style_frames(ref, ctx.dir("ref"),
+                                      float(duration_of(ref)))
+    rel = [f"ref/{Path(f).name}" for f in frames]
+    ctx.job.meta["style_frames"] = rel
+    for r in rel:
+        ctx.job.add_artifact("ref", r)
+    ctx.job.add_event(
+        "style_frames",
+        f"{len(rel)} still(s) cut from the reference and attached to every "
+        f"plate: the look is carried by a picture, not by words")
+    ctx.store.save(ctx.job)
+    return frames
+
+
 def plates(ctx: StageContext) -> None:
     """Step 4: one plate per scene, with per-photo QA and auto-regeneration.
 
     Cast portraits are generated first and attached to the scenes their people
     appear in, so identity survives the whole narrative."""
+    if banner_steps.is_banner(ctx.job):
+        return banner_steps.expand(ctx)
     cast_plates(ctx)
     settings = _qa_settings(ctx)
     model = ctx.config.model_for("image")
     limit = _anchor_limit(ctx)
+    style = _style_frames(ctx)
     redo, note = _targets(ctx, "plates")
     if redo:
         ctx.job.add_event("revision_scope",
@@ -640,12 +877,28 @@ def plates(ctx: StageContext) -> None:
         while True:
             out = ctx.dir("plates") / f"scene_{scene.idx:02d}.png"
             anchors = ctx.job.anchors_for(scene, limit) if _anchoring(ctx) else []
-            prompt = _with_anchor(
+            prompt = refkind.anchor_block(len(style)) + _with_anchor(
                 _steer(scene.image_prompt, note if scene.idx in redo else ""),
                 len(anchors))
+            driver = drivers.for_scene(ctx.job, scene)
+            template = None
+            if driver:
+                # The driver's opening frame goes in as a geometry template, and
+                # the prompt is told not to fight it. The video model re-poses
+                # this photograph into the driver's motion, so a mismatched crop
+                # or pose is the commonest way a driven shot comes out wrong.
+                template = drivers.first_frame(
+                    ctx.job_dir, driver,
+                    ctx.dir("plates") / f"scene_{scene.idx:02d}_template.png")
+                prompt = prompt + "\n\n" + drivers.start_frame_rule(driver)
+            # Identity first, then style, then a driver's template: an image
+            # model weighs the earlier references more, and WHO is in the shot
+            # matters more than what it is drawn like.
+            medias = [str(ctx.job_dir / a) for a in anchors] + list(style)
+            if template:
+                medias.append(str(template))
             result = _paid(ctx, scene, "image", model, prompt, out,
-                           medias=[str(ctx.job_dir / a) for a in anchors],
-                           stage="plates")
+                           medias=medias, stage="plates")
             scene = ctx.job.scene(scene.idx)
             scene.plate = f"plates/{Path(result.files[0]).name}"
             scene.plate_attempts += 1
@@ -666,7 +919,87 @@ def plates(ctx: StageContext) -> None:
             scene.plate = None
             ctx.job.put_scene(scene)
             ctx.store.save(ctx.job)
+
+        # The AFTER frame of a transformation. Generated FROM the before frame,
+        # not merely beside it: the two have to be the same shot -- same person,
+        # pose, camera, crop, wardrobe, light -- differing only by the change,
+        # and the surest way to get that is to hand the model the first one.
+        scene = ctx.job.scene(scene.idx)
+        if scene.end_image_prompt and not (
+                scene.plate_end and (ctx.job_dir / scene.plate_end).exists()):
+            before = ctx.job_dir / scene.plate
+            out_end = ctx.dir("plates") / f"scene_{scene.idx:02d}_end.png"
+            anchors = ctx.job.anchors_for(scene, limit) if _anchoring(ctx) else []
+            end_prompt = (_steer(scene.end_image_prompt,
+                                 note if scene.idx in redo else "")
+                          + MORPH_END_FRAME_RULE)
+            result = _paid(ctx, scene, "image", model, end_prompt, out_end,
+                           medias=[str(before)]
+                                  + [str(ctx.job_dir / a) for a in anchors],
+                           stage="plates")
+            scene = ctx.job.scene(scene.idx)
+            scene.plate_end = f"plates/{Path(result.files[0]).name}"
+            verdict = _run_media_qa(ctx, scene, "plate",
+                                    ctx.job_dir / scene.plate_end,
+                                    scene.end_image_prompt)
+            scene.plate_end_qa = verdict.as_dict() if verdict else None
+            ctx.job.put_scene(scene)
+            ctx.job.add_artifact("plates", scene.plate_end)
+            ctx.store.save(ctx.job)
+
+    _text_card(ctx, model, settings)
     _consume(ctx, "plates")
+
+
+def _text_card(ctx: StageContext, model: str, settings) -> None:
+    """Our offer, set the way the reference sets its own text.
+
+    One card per creative, generated once and kept: it is laid over every size
+    at assembly, and re-buying it per format would pay twice for one picture."""
+    offer = _card_offer(ctx)
+    if not offer:
+        return
+    existing = ctx.job.meta.get("text_card")
+    if existing and (ctx.job_dir / existing).exists():
+        return
+    from ..assemble import CARD_CLEAR_BOTTOM, card_bottom_is_clear, key_text_card
+    key = _card_key(ctx)
+    fmt = _formats(ctx)[0]
+    out = ctx.dir("plates") / "text_card.png"
+    attempts = 0
+    while True:
+        attempts += 1
+        prompt = CARD_BRIEF.format(key=key, clear=int(CARD_CLEAR_BOTTOM * 100),
+                                   offer=offer, size=fmt)
+        holder = ctx.job.text_card()
+        holder.attempts = attempts
+        result = _paid(ctx, holder, "image", model, prompt, out, stage="plates",
+                       put=ctx.job.put_text_card, label="text card")
+        card = ctx.dir("plates") / Path(result.files[0]).name
+        # The rule the card exists under, checked rather than hoped for. A card
+        # over the disclaimer cannot ship, and finding that out at assembly
+        # means finding it out after the clips are paid for.
+        keyed = key_text_card(card, ctx.dir("plates") / "text_card_keyed.png",
+                              key=key)
+        if card_bottom_is_clear(keyed):
+            holder = ctx.job.text_card()
+            holder.file = f"plates/{card.name}"
+            ctx.job.put_text_card(holder)
+            ctx.job.add_artifact("plates", f"plates/{card.name}")
+            ctx.store.save(ctx.job)
+            return
+        ctx.job.add_event(
+            "card_regen",
+            f"the text card reached into the bottom {int(CARD_CLEAR_BOTTOM * 100)}%, "
+            f"where the disclaimer goes; regenerating "
+            f"(attempt {attempts + 1}/{settings.plates_max_attempts})")
+        ctx.store.save(ctx.job)
+        if attempts >= max(1, settings.plates_max_attempts):
+            raise GenError(
+                f"the text card keeps covering the bottom of the frame after "
+                f"{attempts} attempts. That band holds the disclaimer and the "
+                f"badge, so the card cannot be used. Shorten the offer, or turn "
+                f"the card off for this job.")
 
 
 def gate_plates(ctx: StageContext) -> None:
@@ -717,15 +1050,34 @@ def clips(ctx: StageContext) -> None:
             continue
         if not scene.plate:
             raise GenError(f"scene {scene.idx}: no plate to animate")
+        driver = drivers.for_scene(ctx.job, scene)
+        if driver and scene.end_image_prompt:
+            raise GenError(
+                f"scene {scene.idx} both transforms and rides a driver. A morph "
+                f"takes its movement from the two frames and a driver takes it "
+                f"from the video; asking for both describes no shot the model "
+                f"can make. Drop one before the clips are bought.")
         while True:
             out = ctx.dir("clips") / f"scene_{scene.idx:02d}.mp4"
             prompt = _steer(scene.video_prompt, note if scene.idx in redo else "")
-            result = _paid(ctx, scene, "video", model, prompt, out,
-                           params={"duration": scene.duration_s,
-                                   # a voice with no visible speaker makes the
-                                   # model invent a soundtrack, and that is what
-                                   # gets the generation refused for copyright
-                                   "generate_audio": scene.voice == "on_camera"},
+            shot_model = (drivers.engine_model(driver["engine"], model)
+                          if driver else model)
+            params = {"duration": scene.duration_s,
+                      # a voice with no visible speaker makes the model invent a
+                      # soundtrack, and that is what gets the generation refused
+                      # for copyright
+                      "generate_audio": scene.voice == "on_camera"}
+            if scene.end_image_prompt and scene.plate_end:
+                params["end_frame"] = str(ctx.job_dir / scene.plate_end)
+            if driver:
+                params["driver_video"] = str(ctx.job_dir / driver["file"])
+                # The driver's own audio is a stranger's voice. Motion Control
+                # has no say in it and Seedance would happily carry it over, so
+                # a driven shot is generated SILENT and our line is laid on in
+                # `voiceovers` -- the same path a vo shot already takes.
+                params["generate_audio"] = False
+            result = _paid(ctx, scene, "video", shot_model, prompt, out,
+                           params=params,
                            medias=[str(ctx.job_dir / scene.plate)], stage="clips")
             scene = ctx.job.scene(scene.idx)
             scene.clip = f"clips/{Path(result.files[0]).name}"
@@ -764,10 +1116,18 @@ def voiceovers(ctx: StageContext) -> None:
     A "vo" shot has a voice but nobody on screen saying it, so the video model
     is told to make no audio at all -- asking it for a disembodied voice is what
     got BPW026 refused three times. The words are spoken here instead and laid
-    over the clip at assembly."""
+    over the clip at assembly.
+
+    A shot on a motion driver lands here for a different reason: it is silent
+    because the driver's own audio is a stranger's voice, which must not reach
+    the final. Either way the line has to be said by us or not at all."""
+    # A shot on a motion driver is generated silent too, whatever its `voice`
+    # says: the driver carries a stranger talking, and Motion Control gives us
+    # no say over the soundtrack. So its line is spoken here as well -- otherwise
+    # the words are simply gone, and nothing in the run says so.
     pending = [Scene(**r) for r in ctx.job.scenes
-               if r.get("voice") == "vo" and (r.get("line") or "").strip()
-               and not r.get("vo_track")]
+               if (r.get("voice") == "vo" or r.get("driver"))
+               and (r.get("line") or "").strip() and not r.get("vo_track")]
     if not pending:
         return
     try:
@@ -838,6 +1198,11 @@ def _formats(ctx: StageContext) -> List[str]:
 def _subtitle_settings(ctx: StageContext):
     """(style, enabled). pipeline.yaml `subtitles`, overridden by the edit."""
     from ..subtitles import SubtitleStyle
+    if banner_steps.is_banner(ctx.job):
+        # A banner clip is silent by construction, so there is nothing to
+        # transcribe. Burning subtitles over a banner would also cover the
+        # client's own approved copy, which is the whole creative.
+        return None, False
     raw = dict((ctx.config.pipeline or {}).get("subtitles") or {})
     raw.update(edit_of(ctx.job).get("subtitles") or {})
     if not raw.get("enabled", True):
@@ -936,6 +1301,8 @@ def _assembly_inputs(ctx: StageContext, size):
         "music_duck": bool(edit.get("music_duck", True)),
         "packshot": packshot,
         "demo": demo,
+        "text_card": ((ctx.job_dir / ctx.job.meta["text_card"])
+                      if ctx.job.meta.get("text_card") else None),
         "demo_trim_s": intake.get("demo_trim_s"),
         "crf": int(encode.get("crf", 21)),
         "preset": str(encode.get("preset", "veryfast")),
@@ -1103,13 +1470,23 @@ def preflight(ctx: StageContext) -> None:
         # same checks over the same files and fails identically. LME109 did
         # exactly that.
         bad = [c for c in report["checks"] if not c["ok"]]
-        raise GenError(
-            "preflight failed: "
+        blocked = blocking_scenes(ctx.job.scenes, "clip_qa")
+        # Blocked, not failed: every remedy named below lives at GATE_DRAFT, and
+        # `revise` refuses a job that is not at a gate. AW024 was told to run a
+        # command the tool would not accept.
+        raise Blocked(
+            "GATE_DRAFT",
+            "preflight stopped the delivery: "
             + "; ".join(f"{c['name']} ({c['detail']})" for c in bad)
-            + ". Retrying cannot help -- these checks read the files that are "
-              "already on disk. A blocking clip verdict means buying that shot "
-              "again: `revise <id> clip --scene N` with a note saying what was "
-              "wrong, which re-cuts and re-checks everything after it.")
+            + ". Retrying cannot help -- these checks read the files already on "
+              "disk. The job is back at GATE_DRAFT"
+            + (f", where scene(s) {', '.join(map(str, blocked))} block it. "
+               f"Either buy the shot again -- `revise {ctx.job.id} clip --scene N` "
+               f"for the animation, or `revise {ctx.job.id} plates --scene N` "
+               f"when the fault is already in the still, which the video model "
+               f"can only animate -- or accept it: `waive {ctx.job.id} --scene N "
+               f"--note why`, which ships it and keeps the finding in the "
+               f"manifest." if blocked else "."))
 
 
 def delivery(ctx: StageContext) -> None:

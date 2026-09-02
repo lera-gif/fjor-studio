@@ -205,13 +205,19 @@ def test_clips_do_not_auto_regenerate_by_default(home, reference):
     assert [e for e in job.events if e["type"] == "qa_regen"] == []
 
 
-def test_a_blocking_clip_verdict_fails_preflight(home, reference):
+def test_a_blocking_clip_verdict_sends_the_job_back_to_the_draft_gate(home, reference):
+    """AW024 (2026-09-01) failed at preflight and its own error told the
+    producer to run `revise ... clip --scene N` -- which `revise` refuses,
+    because it only accepts a job at a gate. The tool named a command it would
+    not take, with 2,114 credits riding on the answer. Blocked, not failed: the
+    decision belongs at GATE_DRAFT and the job is put back there."""
     _cfg, store, engine, job = setup(home, reference, scenes=1,
                                      clip_qa=qa_critical())
     job = engine.approve(engine.approve(engine.run(job)))
     job = engine.approve(job)
-    assert job.state == "failed"
-    assert "preflight failed" in job.error
+    assert job.state == "GATE_DRAFT"
+    assert "preflight stopped" in job.error
+    assert any(e["type"] == "blocked" for e in job.events)
     report = json.loads((store.job_dir(job.id) / "review" / "preflight.json").read_text())
     assert report["failed"] == ["clip QA"]
     # the failure has to say WHICH shot and what would help. LME109 got
@@ -219,17 +225,38 @@ def test_a_blocking_clip_verdict_fails_preflight(home, reference):
     # suggests -- and failed identically, because retry re-reads the same file.
     assert "blocking: [0]" in job.error
     assert "revise" in job.error and "--scene" in job.error
+    assert "waive" in job.error
     assert "Retrying cannot help" in job.error
 
 
-def test_retrying_a_failed_preflight_changes_nothing(home, reference):
-    """Not a hypothetical: it is the first thing a producer tries."""
+def test_every_remedy_the_preflight_error_names_actually_works(home, reference):
+    """The point of blocking rather than failing. Each of these was refused
+    outright while the job sat in 'failed'."""
+    from fjor_studio.engine import REVISABLE
+    _cfg, store, engine, job = setup(home, reference, scenes=1,
+                                     clip_qa=qa_critical())
+    job = engine.approve(engine.approve(engine.approve(engine.run(job))))
+    assert job.state == "GATE_DRAFT"
+    for what in ("clip", "plates"):
+        assert what in REVISABLE[job.state]
+    # a re-buy of the still is reachable, and stops at the plate gate to be seen
+    revised = engine.revise(store.load(job.id), "plates",
+                            "her body type drifted", [0])
+    assert revised.state == "GATE_PLATES"
+    # and so is accepting it
+    waived = engine.waive(store.load(job.id), [0], "ships")
+    assert waived.scenes[0]["clip_qa"]["severity"] == "critical"
+
+
+def test_re_approving_a_blocked_preflight_changes_nothing(home, reference):
+    """Not a hypothetical: pressing on again is the first thing a producer
+    tries. It re-reads the same file and reaches the same verdict, for free."""
     _cfg, _store, engine, job = setup(home, reference, scenes=1,
                                       clip_qa=qa_critical())
     job = engine.approve(engine.approve(engine.approve(engine.run(job))))
     spent, error = job.spent, job.error
-    job = engine.retry(job)
-    assert job.state == "failed"
+    job = engine.approve(job)
+    assert job.state == "GATE_DRAFT"
     assert job.error == error          # the same verdict on the same file
     assert job.spent == spent          # and it cost nothing to learn that twice
 
@@ -257,7 +284,7 @@ def test_the_same_verdict_does_block_when_the_video_model_speaks(home, reference
     job = engine.approve(engine.approve(engine.run(job)))
     assert job.scenes[0]["clip_qa"]["speech_only"] is False
     job = engine.approve(job)
-    assert job.state == "failed"
+    assert job.state == "GATE_DRAFT"          # blocked, and reviewable
 
 
 def test_preflight_reports_checks_that_could_not_look(home, reference):
@@ -470,10 +497,10 @@ def test_a_waived_scene_delivers_and_the_defect_travels_with_it(home, reference)
     _cfg, store, engine, job = setup(home, reference, scenes=1,
                                      clip_qa=qa_critical())
     job = engine.approve(engine.approve(engine.approve(engine.run(job))))
-    assert job.state == "failed"
+    assert job.state == "GATE_DRAFT"
 
     job = engine.waive(job, [0], "a swoosh nobody will see at 9:16; ships")
-    job = engine.retry(job)
+    job = engine.approve(job)
     assert job.state == "done"
 
     # the verdict is untouched -- it was accepted, not deleted
@@ -507,6 +534,6 @@ def test_waiving_one_scene_does_not_release_another(home, reference):
                                       clip_qa=qa_critical())
     job = engine.approve(engine.approve(engine.approve(engine.run(job))))
     job = engine.waive(job, [0], "accepted on 0 only")
-    job = engine.retry(job)
-    assert job.state == "failed"                          # 1 still blocks
+    job = engine.approve(job)
+    assert job.state == "GATE_DRAFT"                      # 1 still blocks
     assert "blocking: [0, 1]" in job.error

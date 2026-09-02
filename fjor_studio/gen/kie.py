@@ -49,6 +49,8 @@ class ModelSpec:
     image_field: str = ""        # where reference images go, "" = takes none
     max_images: int = 0
     single_image: bool = False   # the field is one URL, not a list
+    needs_driver: bool = False   # refuses to run without a driver video
+    takes_duration: bool = True  # False: the driver decides how long it runs
     t2i_slug: str = ""           # slug to use when there are NO images
     defaults: Tuple[Tuple[str, Any], ...] = ()
 
@@ -74,15 +76,52 @@ MODELS: Dict[str, ModelSpec] = {
         defaults=(("resolution", "720p"), ("aspect_ratio", "9:16"),
                   ("generate_audio", True), ("web_search", False),
                   ("nsfw_checker", False))),
+    # 720p, like its siblings. Their tool shipped Pro, 2.5 and Motion Control
+    # silently generating 1080p at roughly TWICE the price, and fixed it in
+    # r170-r234 -- the final is assembled at 1080x1920 from a 720p source
+    # either way, so the extra resolution bought nothing but the bill.
     "bytedance/seedance-2": ModelSpec(
         "video", "bytedance/seedance-2", "reference_image_urls", 9,
-        defaults=(("resolution", "1080p"), ("aspect_ratio", "9:16"),
+        defaults=(("resolution", "720p"), ("aspect_ratio", "9:16"),
                   ("generate_audio", True), ("web_search", False),
                   ("nsfw_checker", False))),
     "kling-3.0/video": ModelSpec(
         "video", "kling-3.0/video", "image_urls", 1, single_image=True,
         defaults=(("mode", "std"), ("sound", True))),
+    # Motion Control: our photograph, someone else's movement. Both take EXACTLY
+    # one image and one driver video (maxItems 1 on each), and `mode` is the
+    # resolution, not a speed tier.
+    # `input_urls` and `video_urls` are ARRAYS of exactly one (maxItems: 1), and
+    # neither takes a duration: the clip runs as long as the driver does. That
+    # is also why the engine is chosen before the prompts are written -- a 23s
+    # driver stops being silently cut to 15s.
+    "kling-3.0/motion-control": ModelSpec(
+        "video", "kling-3.0/motion-control", "input_urls", 1,
+        needs_driver=True, takes_duration=False,
+        defaults=(("mode", "720p"), ("character_orientation", "video"))),
+    "kling-2.6/motion-control": ModelSpec(
+        "video", "kling-2.6/motion-control", "input_urls", 1,
+        needs_driver=True, takes_duration=False,
+        defaults=(("mode", "720p"), ("character_orientation", "video"))),
 }
+
+# KIE's Motion Control is a PROXY ONTO FAL -- their model page carries
+# `"channel":"fal_request"` -- so fal's schema is what actually validates, and
+# fal's limits are what actually reject. The colleague lost a live generation to
+# each of these before the cause was found; every number here is theirs.
+KLING_MC_IMG_MAX_BYTES = 10 * 1024 * 1024     # the base64 upload inflates by ~33%
+KLING_MC_VID_MAX_BYTES = 100 * 1024 * 1024
+KLING_MC_IMG_MAX_PX = 3850                    # fal: max width/height 3850
+KLING_MC_IMG_MIN_SHORT_PX = 340               # strictly greater than
+KLING_MC_VIDEO_SUFFIXES = {".mp4", ".mov"}
+
+# Never send this to Motion Control. It exists in KIE's OpenAPI markdown and
+# NOWHERE else -- not in fal's schema, not in Kling's own API, not in KIE's own
+# playground -- and sending it created the task, passed validation, then died on
+# execution with a faceless `Internal Error` AFTER the money was committed.
+# Background is steered through the prompt instead, which is what Kling's own
+# Motion Control guide recommends.
+FORBIDDEN_MC_FIELDS = ("background_source",)
 
 # Seedance i2v takes ONE start frame under a different key than r2v's list.
 I2V_FIELD = "first_frame_url"
@@ -145,6 +184,50 @@ class KieBackend(Backend):
         self._uploads[path] = url
         return url
 
+    # -- Motion Control preflight --------------------------------------------
+    @staticmethod
+    def motion_control_precheck(image: Path, driver: Path) -> None:
+        """Refuse a Motion Control request that fal will reject anyway.
+
+        Every one of these limits was learned from a live failure: KIE accepts
+        the task, charges for it, and fal kills it on execution with a faceless
+        `Internal Error`. Checked here, the answer costs nothing."""
+        image, driver = Path(image), Path(driver)
+        if not image.is_file():
+            raise GenError(f"motion control: no character image at {image}")
+        if not driver.is_file():
+            raise GenError(f"motion control: no driver video at {driver}")
+        if image.stat().st_size > KLING_MC_IMG_MAX_BYTES:
+            raise GenError(
+                f"motion control: the image is "
+                f"{image.stat().st_size / 1048576:.1f} MB and the limit is 10 MB "
+                f"(the base64 upload inflates it by a third again)")
+        if driver.stat().st_size > KLING_MC_VID_MAX_BYTES:
+            raise GenError(
+                f"motion control: the driver is "
+                f"{driver.stat().st_size / 1048576:.1f} MB and the limit is 100 MB "
+                f"-- cut a shorter piece")
+        if driver.suffix.lower() not in KLING_MC_VIDEO_SUFFIXES:
+            raise GenError(
+                f"motion control: the driver must be mp4 or mov, not "
+                f"'{driver.suffix}'")
+        try:
+            from ..assemble import probe
+            streams = [s for s in probe(image)["streams"] if s.get("width")]
+            w, h = int(streams[0]["width"]), int(streams[0]["height"])
+        except Exception as exc:  # noqa: BLE001
+            raise GenError(f"motion control: could not measure {image.name}: {exc}")
+        short, long = min(w, h), max(w, h)
+        if short <= KLING_MC_IMG_MIN_SHORT_PX:
+            raise GenError(
+                f"motion control: the image's short side is {short}px and fal "
+                f"needs more than {KLING_MC_IMG_MIN_SHORT_PX}px")
+        if long > KLING_MC_IMG_MAX_PX:
+            raise GenError(
+                f"motion control: the image is {w}x{h} and fal caps either side "
+                f"at {KLING_MC_IMG_MAX_PX}px -- this is undocumented at KIE and "
+                f"arrives as 'Internal Error' after the charge")
+
     # -- submit --------------------------------------------------------------
     def build_input(self, model: str, prompt: str,
                     params: Optional[Dict[str, Any]] = None,
@@ -173,7 +256,51 @@ class KieBackend(Backend):
                 field, urls = I2V_FIELD, urls[:1]
             body[field] = urls[0] if (spec.single_image or field == I2V_FIELD) else urls
 
-        if spec.kind == "video":
+        # -- a driver video, an end frame, or neither --------------------
+        # These three shapes are mutually exclusive, and mixing them is a
+        # GUARANTEED refusal rather than a worse result. Seedance takes:
+        #   plain           first_frame_url
+        #   reference       reference_image_urls
+        #   with a driver   reference_image_urls + reference_video_urls
+        #   morph           first_frame_url + last_frame_url, and nothing else
+        driver = params.pop("driver_video_url", None)
+        end_frame = params.pop("end_frame_url", None)
+        if spec.needs_driver and not driver:
+            raise GenError(
+                f"kie: {model} is Motion Control -- it transfers movement from a "
+                f"driver video and cannot run without one. Attach a driver, or "
+                f"route this shot to a plain video model.")
+        if driver and end_frame:
+            raise GenError(
+                "kie: a driver video and an end frame cannot go in one request. "
+                "Motion transfer takes its movement from the driver; a morph "
+                "takes its movement from the two frames. Pick one.")
+        for forbidden in FORBIDDEN_MC_FIELDS:
+            if forbidden in params:
+                raise GenError(
+                    f"kie: '{forbidden}' must never be sent to Motion Control. "
+                    f"KIE proxies it onto fal, whose schema has no such field: "
+                    f"the task is created, passes validation, and then dies on "
+                    f"execution with 'Internal Error' -- after it has been paid "
+                    f"for. Steer the background through the prompt.")
+        if driver:
+            if spec.slug.endswith("motion-control"):
+                body["video_urls"] = [driver]
+            else:
+                body["reference_video_urls"] = [driver]
+                # a driver forces the reference shape: first_frame_url beside
+                # reference_video_urls is refused outright
+                if "first_frame_url" in body:
+                    body.pop("first_frame_url")
+        if end_frame:
+            first = urls[0] if urls else None
+            if not first:
+                raise GenError("kie: a morph needs a start frame as well as an end frame")
+            body.pop(spec.image_field, None)
+            body["first_frame_url"] = first
+            body["last_frame_url"] = end_frame
+
+        if spec.kind == "video" and spec.takes_duration:
             raw = params.get("duration", params.get("duration_s", 5))
             duration = int(round(float(raw)))
             if not DURATION_MIN <= duration <= DURATION_MAX:
@@ -184,7 +311,8 @@ class KieBackend(Backend):
             body["duration"] = duration
 
         for key in ("aspect_ratio", "resolution", "output_format", "generate_audio",
-                    "nsfw_checker", "web_search", "mode", "sound"):
+                    "nsfw_checker", "web_search", "mode", "sound",
+                    "character_orientation"):
             if key in params and key != "mode":
                 body[key] = params[key]
         return slug, body
@@ -198,6 +326,20 @@ class KieBackend(Backend):
             raise GenError(f"kie: model '{model}' makes {spec.kind}, not {kind}")
         urls = [self.upload(m) if not str(m).startswith(("http://", "https://"))
                 else str(m) for m in (medias or [])]
+        # A driver video and an end frame are uploaded like any other media, but
+        # they are NOT reference images -- they name a different field, and
+        # putting them in the image list is one of the refusals build_input
+        # exists to prevent.
+        params = dict(params or {})
+        for local_key, url_key in (("driver_video", "driver_video_url"),
+                                   ("end_frame", "end_frame_url")):
+            local = params.pop(local_key, None)
+            if local and not params.get(url_key):
+                if spec.needs_driver and local_key == "driver_video" and medias:
+                    self.motion_control_precheck(Path(medias[0]), Path(local))
+                params[url_key] = (str(local)
+                                   if str(local).startswith(("http://", "https://"))
+                                   else self.upload(local))
         slug, body = self.build_input(model, prompt, params, urls)
         data = self._call("POST", f"{self.base}{API_PATH}/jobs/createTask",
                           {"model": slug, "input": body})

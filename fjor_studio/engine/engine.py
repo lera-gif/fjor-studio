@@ -71,6 +71,25 @@ class TransitionError(Exception):
     pass
 
 
+class Blocked(Exception):
+    """A stage that cannot pass, whose remedy lives at an earlier GATE.
+
+    Failing the job would be honest about the stop and wrong about what to do
+    next. AW024 (2026-09-01) failed at preflight on three blocking clip
+    verdicts; its own error told the producer to run `revise ... clip --scene N`,
+    and `revise` refuses anything that is not at a gate. The tool named a
+    command it would not accept, at the moment 2,114 credits were riding on the
+    answer.
+
+    So a blocked stage says WHERE the decision belongs, and the job is put back
+    there with its reason recorded. Every remedy that gate offers -- revise,
+    waive, approve again -- is then reachable."""
+
+    def __init__(self, gate: str, message: str):
+        super().__init__(message)
+        self.gate = gate
+
+
 @dataclass
 class StageContext:
     job: Job
@@ -164,6 +183,24 @@ class Engine:
         self.store.save(job)
         try:
             fn(self._ctx(job))
+        except Blocked as exc:
+            # A gate the config skips would send the run straight back here and
+            # round again, so a blocked stage that cannot be reviewed is simply
+            # a failure. `GATE_DRAFT` is unskippable, which is why it is the one
+            # preflight uses.
+            if exc.gate in self.skip_gates or exc.gate not in GATES:
+                job.error = f"{stage}: {exc}"
+                job.add_event("error", job.error, failed_stage=stage,
+                              failed_state=job.state)
+                job.state = "failed"
+            else:
+                job.error = f"{stage}: {exc}"
+                job.add_event("blocked", job.error, failed_stage=stage,
+                              returned_to=exc.gate)
+                job.state = exc.gate
+                job.gate_ready = False
+            self.store.save(job)
+            return False
         except Exception as exc:  # noqa: BLE001 -- any stage error fails resumably
             job.error = f"{stage}: {exc}"
             job.add_event("error", job.error, failed_stage=stage,
@@ -231,6 +268,81 @@ class Engine:
         job.gate_ready = False
         self.store.save(job)
         return self.run(job)
+
+    def add_driver(self, job: Job, source, engine: str = "seedance",
+                   note: str = "") -> Job:
+        """Register a motion driver on the job. Costs nothing."""
+        from .. import drivers
+        entry = drivers.add(job, self.store.job_dir(job.id), source, engine, note)
+        job.add_event(
+            "driver_added",
+            f"driver {entry['id']} ({entry['duration_s']}s, {entry['engine']}) "
+            f"from {entry['source']}" + (f": {note}" if note else ""))
+        self.store.save(job)
+        return job
+
+    def _attachable(self, job: Job, scenes: List[int]) -> List[int]:
+        """The shots a driver may be attached to, or a refusal.
+
+        Separate from `attach_driver` so it can be asked BEFORE a driver is
+        registered: registering copies a video into the job, and a refusal after
+        that leaves a driver attached to nothing and a file nobody asked for."""
+        asked = [int(i) for i in (scenes or [])]
+        if not asked:
+            raise TransitionError("attach needs the scene(s) to put on the driver")
+        known = [s["idx"] for s in job.scenes]
+        unknown = [i for i in asked if i not in known]
+        if unknown:
+            raise TransitionError(f"no scene(s) {unknown} on this job (has {known})")
+        return asked
+
+    def drive(self, job: Job, source, scenes: List[int],
+              engine: str = "seedance", note: str = "") -> Job:
+        """Register a driver and put shots on it, or do neither.
+
+        The two halves are one decision. A driver registered and then not
+        attached is a video copied into the job that changes nothing, and -- the
+        way that actually costs money -- a plan gate approved with the shots'
+        durations not yet retimed to the driver's."""
+        self._attachable(job, scenes)
+        job = self.add_driver(job, source, engine, note)
+        from .. import drivers
+        return self.attach_driver(job, drivers.all_of(job)[-1]["id"], scenes)
+
+    def attach_driver(self, job: Job, driver_id: str, scenes: List[int]) -> Job:
+        """Point shots at a driver. One driver can serve several.
+
+        Motion Control runs for exactly as long as the driver, so the shot's
+        duration becomes the driver's -- the plan's 4-15s clamp does not apply
+        and must not be allowed to silently shorten it. That is the whole reason
+        the engine is chosen on the driver rather than while writing prompts."""
+        from .. import drivers
+        driver = drivers.find(job, driver_id)
+        asked = self._attachable(job, scenes)
+        retimed = []
+        for idx in asked:
+            scene = job.scene(idx)
+            if scene.clip:
+                raise TransitionError(
+                    f"scene {idx} already has a clip -- attaching a driver now "
+                    f"would describe a shot that was not the one bought. Revise "
+                    f"the clip instead, which re-buys it.")
+            scene.driver = driver_id
+            if drivers.is_motion_control(driver["engine"]):
+                if abs(scene.duration_s - driver["duration_s"]) > 0.05:
+                    retimed.append((idx, scene.duration_s, driver["duration_s"]))
+                scene.duration_s = driver["duration_s"]
+            job.put_scene(scene)
+        job.add_event(
+            "driver_attached",
+            f"scene(s) {asked} animate from driver {driver_id} "
+            f"({driver['engine']})"
+            + ("; retimed to the driver: "
+               + ", ".join(f"{i} {was}s->{now}s" for i, was, now in retimed)
+               if retimed else ""),
+            scenes=asked)
+        self.store.save(job)
+        return job
 
     def waive(self, job: Job, scenes: List[int], note: str = "") -> Job:
         """Accept named blocking clip verdicts and let the job deliver.

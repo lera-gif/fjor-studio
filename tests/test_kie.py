@@ -281,3 +281,110 @@ def test_the_copyright_message_does_not_promise_a_retry_will_work():
     text = str(exc.value)
     assert "does NOT clear it" in text
     assert "Name the audio explicitly" in text
+
+
+def test_every_video_model_asks_for_720p():
+    """Their tool billed roughly double for a year because Pro, 2.5 and Motion
+    Control defaulted to 1080p while the final was assembled at 1080x1920 from
+    it regardless. A resolution default is a price, not a preference."""
+    from fjor_studio.gen.kie import MODELS
+    for name, spec in MODELS.items():
+        if spec.kind != "video":
+            continue
+        res = dict(spec.defaults).get("resolution")
+        assert res in (None, "720p"), f"{name} would bill for {res}"
+
+
+# -- Video Reference and morph: three shapes that must not mix ---------------
+
+def body_for(model, params, urls=("A.png",)):
+    from fjor_studio.gen.kie import KieBackend
+    b = KieBackend.__new__(KieBackend)
+    return b.build_input(model, "prompt", dict(params), list(urls))[1]
+
+
+def test_a_driver_video_forces_the_reference_shape():
+    """first_frame_url beside reference_video_urls is a guaranteed refusal, not
+    a worse result -- their r194 note is explicit about it."""
+    body = body_for("bytedance/seedance-2-fast",
+                    {"duration": 9, "driver_video_url": "D.mp4"})
+    assert body["reference_image_urls"] == ["A.png"]
+    assert body["reference_video_urls"] == ["D.mp4"]
+    assert "first_frame_url" not in body
+
+
+def test_a_morph_sends_two_frames_and_nothing_else():
+    body = body_for("bytedance/seedance-2-fast",
+                    {"duration": 9, "end_frame_url": "B.png"})
+    assert body["first_frame_url"] == "A.png"
+    assert body["last_frame_url"] == "B.png"
+    assert "reference_image_urls" not in body
+    assert "reference_video_urls" not in body
+
+
+def test_a_driver_and_an_end_frame_together_are_refused():
+    """Motion transfer takes its movement from the driver, a morph from the two
+    frames. Both at once describes no request the API has."""
+    from fjor_studio.gen.base import GenError
+    with pytest.raises(GenError):
+        body_for("bytedance/seedance-2-fast",
+                 {"driver_video_url": "D.mp4", "end_frame_url": "B.png"})
+
+
+def test_motion_control_takes_one_image_one_driver_and_no_duration():
+    """`input_urls`/`video_urls` are arrays of exactly one, and the clip runs as
+    long as the driver -- a duration field is one KIE does not have."""
+    body = body_for("kling-3.0/motion-control",
+                    {"duration": 9, "driver_video_url": "D.mp4"})
+    assert body["input_urls"] == ["A.png"]
+    assert body["video_urls"] == ["D.mp4"]
+    assert "duration" not in body
+    assert body["mode"] == "720p" and body["character_orientation"] == "video"
+
+
+def test_motion_control_without_a_driver_is_refused_before_it_is_sent():
+    from fjor_studio.gen.base import GenError
+    with pytest.raises(GenError) as exc:
+        body_for("kling-3.0/motion-control", {"duration": 9})
+    assert "driver" in str(exc.value)
+
+
+def test_background_source_can_never_reach_motion_control():
+    """It exists in KIE's markdown and nowhere else. Sending it creates the
+    task, passes validation, and dies on execution with 'Internal Error' --
+    after the charge."""
+    from fjor_studio.gen.base import GenError
+    with pytest.raises(GenError) as exc:
+        body_for("kling-3.0/motion-control",
+                 {"driver_video_url": "D.mp4", "background_source": "keep"})
+    assert "Internal Error" in str(exc.value)
+
+
+def test_the_precheck_catches_what_fal_would_reject(tmp_path):
+    """KIE accepts and charges; fal kills it. Every limit here cost the
+    colleague a live generation to find."""
+    import subprocess
+    from fjor_studio.gen.base import GenError
+    from fjor_studio.gen.kie import KieBackend
+    small = tmp_path / "tiny.png"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                    "-i", "color=c=blue:size=200x300", "-frames:v", "1", str(small)],
+                   check=True, capture_output=True)
+    ok = tmp_path / "ok.png"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                    "-i", "color=c=blue:size=1080x1920", "-frames:v", "1", str(ok)],
+                   check=True, capture_output=True)
+    driver = tmp_path / "d.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                    "-i", "color=c=red:size=320x240:duration=1", str(driver)],
+                   check=True, capture_output=True)
+
+    with pytest.raises(GenError) as exc:      # short side must exceed 340px
+        KieBackend.motion_control_precheck(small, driver)
+    assert "short side" in str(exc.value)
+
+    with pytest.raises(GenError) as exc:      # mp4 or mov only
+        KieBackend.motion_control_precheck(ok, ok)
+    assert "mp4 or mov" in str(exc.value)
+
+    KieBackend.motion_control_precheck(ok, driver)     # and this one passes

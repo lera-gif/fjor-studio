@@ -4,7 +4,9 @@
     models.yaml     which backend and model serves each kind
     verticals.yaml  id prefix + delivery folder per vertical
     delivery.yaml   where finals land and what they are called
-    auth.yaml       the keys. Never committed, never printed.
+    auth.yaml       keys, if a machine keeps them on disk. Never committed,
+                    never printed. A KIT supplied at runtime is preferred and
+                    overrides it -- see `kit.py`.
 
 `Config.redacted()` is the only representation that may be logged or shown.
 """
@@ -109,6 +111,24 @@ class Config:
     verticals: Dict[str, Any] = field(default_factory=dict)
     delivery: Dict[str, Any] = field(default_factory=dict)
 
+    def __repr__(self) -> str:
+        """Redacted, always, because a repr is not asked for -- it happens.
+
+        The docstring at the top of this file has said since it was written that
+        `redacted()` is the only representation that may be shown, and nothing
+        enforced it: `Config` was a plain dataclass, so its generated repr
+        carried every API key in `auth`. That is not a hypothetical leak. Any
+        exception whose message interpolates a Config prints them; `job.error`
+        is built by interpolating an exception, and it is stored in job.json and
+        rendered on the dashboard. It took one wrong argument in a throwaway
+        script to print the lot, on 2026-09-02.
+
+        A secret that only stays secret while nobody makes a mistake is not
+        kept, it is gambled."""
+        return (f"Config(home={self.home!r}, "
+                f"verticals={sorted((self.verticals or {}).get('verticals') or {})}, "
+                f"auth=<redacted: {', '.join(sorted(self.auth or {}))}>)")
+
     @property
     def jobs_dir(self) -> Path:
         return self.home / "jobs"
@@ -191,7 +211,18 @@ def load(home: Optional[Path] = None) -> Config:
     cfg_dir = home / "config"
     pipeline = _deep_merge(DEFAULT_PIPELINE, _read(cfg_dir / "pipeline.yaml"))
     models = _deep_merge(DEFAULT_MODELS, _read(cfg_dir / "models.yaml"))
+    # Keys, in order of preference. A kit held by THIS PROCESS wins; then one
+    # $FJOR_STUDIO_KIT points at; then auth.yaml, which still works and is what
+    # this studio has always used, but is no longer what a new deployment is
+    # told to do -- a file of live keys in the working tree is a standing
+    # invitation, and `kit.py` says why at length.
+    from . import kit as _kit
     auth = _read(cfg_dir / "auth.yaml")
+    session = _kit.current()
+    if session:
+        # merged, not replaced: a kit carries keys, and auth.yaml may also hold
+        # the dashboard token, which is not a provider credential
+        auth = _deep_merge(auth, session)
     verticals = _read(cfg_dir / "verticals.yaml")
     delivery = _deep_merge(DEFAULT_DELIVERY, _read(cfg_dir / "delivery.yaml"))
     # the env var wins: one checkout, several machines, no edit to a tracked file
