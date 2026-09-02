@@ -7,6 +7,7 @@ suite: every check in this mode compares the result with its input, and a double
 that hands back an unrelated picture could not fail one of them honestly.
 """
 import json
+from pathlib import Path
 
 from conftest import a_banner, banner_answers, write_config, write_replies
 
@@ -340,3 +341,125 @@ def test_the_whole_stage_survives_a_provider_that_answers_in_its_own_size(tmp_pa
     survived = job.meta["banner"]["survived"]
     assert survived["intact"] is True and survived["changed_pixels"] == 0
     assert (store.job_dir(job.id) / job.scenes[0]["plate"]).exists()
+
+
+def test_a_thumbnail_is_refused_before_anything_is_bought(tmp_path):
+    """SL040 (2026-09-02): a 220x220 file named `..._s-1080x1080.jpg`. The name
+    claimed the artwork and the file was a preview. It was enlarged 4.9x to fill
+    the canvas, and every check downstream then preserved that blurry upscale
+    pixel-perfectly and reported success."""
+    cfg, store, engine, job = banner_job(tmp_path / "h",
+                                         a_banner(tmp_path / "b.png", 220, 220))
+    job = engine.run(job)
+    assert job.state == "failed"
+    events = json.dumps(job.events)
+    assert "4.91x" in events and "thumbnail, not the artwork" in events
+    assert job.spent == 0
+    assert not submitted(engine, "image")
+
+
+def test_a_modest_enlargement_is_allowed_and_said_out_loud(tmp_path):
+    """A little softness is a judgement call, not a refusal -- but the producer
+    should be told the number rather than discovering it in the plate."""
+    cfg, store, engine, job = banner_job(tmp_path / "h",
+                                         a_banner(tmp_path / "b.png", 540, 540))
+    job = to_gate(engine, job, "GATE_PLAN")
+    assert job.state == "GATE_PLAN"
+    assert "enlarged 2.0x" in json.dumps(job.events)
+
+
+def test_qa_judges_the_frame_that_ships(tmp_path):
+    """SL040 again: QA read the model's RAW return, while the plate delivered is
+    the one produced afterwards by re-compositing and removing the small print.
+    It reported garbled footer text the re-composite had already repaired, and
+    had never once seen the frame that gets animated."""
+    cfg, store, engine, job = banner_job(tmp_path / "h", a_banner(tmp_path / "b.png"))
+    job = to_gate(engine, job, "GATE_PLATES")
+    plate = job.scenes[0]["plate"]
+    judged = [c["medias"][0] for c in submitted(engine, "analysis")
+              if c["params"].get("qa_kind") == "plate"]
+    assert judged, "no plate QA ran"
+    assert judged[-1].endswith(Path(plate).name), (
+        f"QA looked at {judged[-1]}, the job ships {plate}")
+
+
+# -- re-formatting, the other engine -----------------------------------------
+
+def redraw_job(home, banner_path, **intake):
+    intake.setdefault("banner_engine", "redraw")
+    return banner_job(home, banner_path, **intake)
+
+
+def test_a_redraw_sends_the_bare_banner_and_no_canvas(tmp_path):
+    """Their tool moved to this after live tests: compositing 'don't touch the
+    square' gave sharpness seams, picture-in-picture and duplicate faces
+    (r146, 2026-08-16). SL040 reproduced all three."""
+    cfg, store, engine, job = redraw_job(tmp_path / "h", a_banner(tmp_path / "b.png"))
+    job = to_gate(engine, job, "GATE_PLATES")
+    assert job.state == "GATE_PLATES", job.error
+    calls = [c for c in submitted(engine, "image")]
+    assert len(calls) == 1, "a redraw is ONE call: no canvas, no small-print pass"
+    sent = calls[0]
+    assert sent["medias"][0].endswith("b.png")        # the banner itself
+    assert "magenta" not in sent["prompt"]            # there is no marker
+    assert "LAYOUT LOCK" in sent["prompt"]
+    assert sent["params"]["resolution"] == "2K"
+    assert (store.job_dir(job.id) / job.scenes[0]["plate"]).exists()
+
+
+def test_a_redraw_refuses_to_run_with_qa_switched_off(tmp_path):
+    """A redraw leaves no original pixels, so nothing arithmetic can vouch for
+    it. Running one with QA off would be a stage that cannot fail."""
+    home = tmp_path / "h"
+    cfg, store, engine, job = redraw_job(home, a_banner(tmp_path / "b.png"))
+    write_config(home, pipeline={"qa": {"plates": {"enabled": False}}})
+    cfg, store, engine = open_studio(home)
+    job = to_gate(engine, store.load(job.id), "GATE_PLATES")
+    assert job.state == "failed"
+    assert "needs plate QA" in job.error
+
+
+def test_the_brief_changes_the_visual_in_a_redraw_and_is_refused_on_a_canvas(tmp_path):
+    """The honest split. A redraw regenerates the picture, so an edit is simply
+    part of the instruction; on a canvas it would be painted and then overwritten
+    when the original is re-composited back."""
+    home = tmp_path / "h"
+    write_config(home)
+    write_replies(home, echo_images=True,
+                  text=banner_answers(edits='replace "24 July" with "24 August"'),
+                  **{"qa:plate": json.dumps({"passed": True, "severity": "ok"}),
+                     "qa:clip": json.dumps({"passed": True, "severity": "ok"})})
+    cfg, store, engine = open_studio(home)
+    job = new_job(store, cfg, "lipedema_pilates",
+                  {"banner": str(a_banner(tmp_path / "b.png")), "week": 34,
+                   "concept": "banner", "producer": "lp",
+                   "banner_engine": "redraw",
+                   "brief": "change the date to 24 August"})
+    job = to_gate(engine, job, "GATE_PLAN")
+    # the producer's words reached the writer...
+    asked = [c["prompt"] for c in submitted(engine, "text")][0]
+    assert "change the date to 24 August" in asked
+    # ...and the writer's edit reached the prompt that redraws the banner
+    sent = job.scenes[0]["image_prompt"]
+    assert "and only these" in sent and '"24 August"' in sent
+    assert not [e for e in job.events if e["type"] == "banner_brief_ignored"]
+
+    cfg2, store2, engine2, job2 = banner_job(tmp_path / "h2", a_banner(tmp_path / "b.png"),
+                                             brief="change the date to 24 August")
+    job2 = to_gate(engine2, job2, "GATE_PLAN")
+    assert any(e["type"] == "banner_brief_ignored" for e in job2.events)
+
+
+def test_an_unknown_engine_is_refused_by_name(tmp_path):
+    cfg, store, engine, job = banner_job(tmp_path / "h", a_banner(tmp_path / "b.png"),
+                                         banner_engine="outpaint")
+    job = engine.run(job)
+    assert job.state == "failed"
+    assert "is not a banner engine" in job.error
+
+
+def test_the_page_explains_which_guarantee_each_engine_gives():
+    from fjor_studio.dashboard.page import PAGE
+    for needle in ("How to reach 9:16", "zero changed pixels",
+                   "QA is the only guard", "visual changes go", "f_bengine"):
+        assert needle in PAGE, needle

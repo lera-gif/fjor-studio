@@ -356,7 +356,7 @@ class Studio:
             "music": form.get("music") or None,
             "creative_name": form["creative_name"].strip(),
         }
-        for field in ("morph", "text_card", "ref_kind"):
+        for field in ("morph", "text_card", "ref_kind", "banner_engine"):
             if (form.get(field) or "").strip():
                 intake[field] = form[field].strip()
         if form.get("scenes") not in (None, ""):
@@ -365,6 +365,24 @@ class Studio:
             intake["crossfade_s"] = float(form["crossfade_s"])
         job = new_job(store, cfg, vertical, intake, job_id=parsed["id"])
         return job.id
+
+    def delete_job(self, job_id: str) -> Dict[str, Any]:
+        """Retire a job and free its creative id.
+
+        `store.delete` moves it into `_deleted/` rather than unlinking, so a
+        mis-click costs nothing and paid media stays recoverable. Refused only
+        while the worker holds it: deleting a directory out from under a running
+        stage would lose a generation that has already been paid for."""
+        if self.worker.queued_for(job_id):
+            raise ValueError(
+                f"{job_id} is running. Cancel it first, then delete -- removing "
+                f"a job mid-stage loses a generation that may already be paid "
+                f"for.")
+        cfg, store, _engine = self.open()
+        job = store.load(job_id)
+        moved = store.delete(job_id)
+        return {"id": job_id, "moved_to": str(moved), "state": job.state,
+                "spent": round(job.spent, 1)}
 
     def delivery_status(self) -> Dict[str, Any]:
         """Where finals will land, and whether that can work.
@@ -786,6 +804,9 @@ def make_handler(studio: Studio, token: str = ""):
                     if payload.get("run"):
                         studio.worker.submit(new_id, "run")
                     return self._json({"id": new_id})
+                m = re.match(r"^/api/jobs/([A-Za-z0-9]+)/delete$", path)
+                if m:
+                    return self._json(studio.delete_job(m.group(1)))
                 m = re.match(r"^/api/jobs/([A-Za-z0-9]+)/([a-z]+)$", path)
                 if m:
                     job_id, action = m.group(1), m.group(2)

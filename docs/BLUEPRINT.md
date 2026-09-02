@@ -438,6 +438,38 @@ which is 3.4c again, about style instead of identity.
   AW025's first live plate was never judged. Rule 4, from a fourth direction: a
   check nobody can read is a check that cannot fail.
 
+### 3.4j Two ways to reach 9:16, and they are not the same promise
+
+SL040 (2026-09-02) came back with a seam across the join and the subject's eyes
+and hair duplicated into the top margin. Their tool documents exactly that, and
+what they did about it -- r146, the owner's verdict of 2026-08-16 after live
+tests: "the old fixed outpaint prompts were removed -- compositing 'don't touch
+the square' gave sharpness seams, picture-in-picture, and duplicate faces."
+
+So there are two engines, chosen per job, and the difference is a GUARANTEE
+rather than a setting.
+
+- **`canvas`** composites the banner here, in ffmpeg, and asks the model to
+  replace the marker only. Its promise is arithmetic: zero changed pixels,
+  proven on every run. Right for dense copy and a precisely-placed logo.
+- **`redraw`** hands over the bare banner and re-lays the whole creative for the
+  taller frame. Right for a photo-led banner, and the default -- but it leaves
+  NO original pixels, so `banner_survived` and `same_picture` are both
+  meaningless for it. QA is the only guard, and it is therefore not optional: a
+  redraw refuses to run with plate QA switched off, because a stage that cannot
+  fail is the one thing this pipeline does not ship.
+- **A brief edit is applied by `redraw` and refused by `canvas`**, and that is
+  the same distinction rather than an inconsistency: a redraw regenerates the
+  picture, so an edit is part of the instruction; on a canvas it would be
+  painted and then overwritten when the original is composited back.
+- **A thumbnail is refused at intake.** SL040's source was 220x220 behind a name
+  claiming 1080x1080 -- enlarged 4.9x, after which every check preserved a blurry
+  upscale perfectly and reported success. Anything past 3x is refused; a smaller
+  enlargement is allowed and said out loud.
+- **QA judges the frame that SHIPS.** It read the model's raw return while the
+  delivered plate was produced afterwards, so it reported damage already
+  repaired and had never seen what gets animated. Rule 4, a fifth time.
+
 ### 3.5c A stop must leave the producer somewhere they can decide
 
 AW024 failed at preflight on three blocking clip verdicts, and its own error
@@ -784,7 +816,7 @@ fjor_studio/
   cli.py               new / run / approve / revise / retry / status / config
 ```
 
-551 tests, all of which execute the code rather than inspecting it.
+563 tests, all of which execute the code rather than inspecting it.
 
 ---
 

@@ -74,6 +74,20 @@ def placement(banner_w: int, banner_h: int,
             "canvas_w": cw, "canvas_h": ch}
 
 
+# How far below the canvas a banner may be before it is refused. SL040
+# (2026-09-02) was a 220x220 thumbnail named `..._s-1080x1080.jpg` -- the
+# filename claimed the real asset and the file was a preview. It was scaled 4.9x
+# to fill the canvas, and every check downstream then preserved that blurry
+# upscale pixel-perfectly and reported success. Held to a third of the canvas
+# width: a little softness is a judgement call, a 4.9x blow-up is not.
+MIN_BANNER_SCALE = 3.0
+
+
+def upscale_of(banner_w: int, canvas: Tuple[int, int] = CANVAS) -> float:
+    """How much the canvas will have to enlarge this banner."""
+    return round(canvas[0] / max(1, int(banner_w)), 2)
+
+
 def build_canvas(banner: Path, dest: Path,
                  canvas: Tuple[int, int] = CANVAS) -> Dict[str, Any]:
     """The banner at its true size on a marker-filled 9:16 frame.
@@ -354,6 +368,39 @@ pixels supply their own colour. The one exception is quoted printed text in Q3:
 a headline reading "Black Friday" is quoted, and quotes are exempt.
 """
 
+# THE TWO ENGINES.
+#
+# `canvas` composites the banner onto a marker frame here, in ffmpeg, and asks
+# the model to replace the marker only. Its guarantee is arithmetic: the banner
+# comes back with zero changed pixels, proven every run.
+#
+# `redraw` hands the model the BARE banner and asks it to re-render the whole
+# creative at 9:16 -- repositioning the photograph, reflowing the type. Their
+# tool's own history is the argument for having it (r146, Kolv's verdict of
+# 2026-08-16 after live tests): "the old fixed outpaint prompts were removed --
+# compositing 'don't touch the square' gave sharpness seams, picture-in-picture,
+# and duplicate faces." SL040 produced exactly that.
+#
+# The trade is real and cannot be hidden. A redraw leaves NO original pixels to
+# compare against, so `banner_survived` and `same_picture` are both meaningless
+# for it -- the layout is meant to change. Its only guard is QA, which is why
+# `redraw` refuses to run with QA switched off.
+ENGINES = ("canvas", "redraw")
+
+_REDRAW_OPEN = (
+    "Re-render this {bw}x{bh} advertising banner as a vertical {cw}x{ch} "
+    "creative. It is a finished, client-approved ad: the words, the offer and "
+    "the brand are fixed, and the picture is being re-laid-out for a taller "
+    "frame -- not redesigned.")
+
+_LAYOUT_LOCK = (
+    "LAYOUT LOCK: this is a re-format, not a redesign. Every element that is on "
+    "the banner is on the new frame, in the same reading order, at the same "
+    "relative prominence. Do not re-word anything, do not re-order the lines, "
+    "do not add a headline or a badge, do not invent a logo. The photograph may "
+    "be re-framed to fill the taller shape and the type may be re-set to suit "
+    "it -- that is the whole job -- but nothing gains or loses importance.")
+
 # Every block of the assembled prompt, in the order the model reads them.
 _FILL = ("This image is a {cw}x{ch} vertical canvas. The finished ad banner is "
          "already placed in the middle at its true size; the areas above and "
@@ -404,7 +451,9 @@ def _quoted(names) -> str:
 
 def expansion_prompt(analysis: Dict[str, Any],
                      canvas: Tuple[int, int] = CANVAS,
-                     marker: str = MARKER) -> str:
+                     marker: str = MARKER,
+                     engine: str = "canvas",
+                     size: Optional[Tuple[int, int]] = None) -> str:
     """The fill instruction, assembled from the four answers.
 
     `analysis` carries `above`, `below` (Q1), `cut_off` and `leave_cropped`
@@ -423,12 +472,22 @@ def expansion_prompt(analysis: Dict[str, Any],
         raise BannerError(
             "Q1 is unanswered: the top and the bottom must be described "
             "SEPARATELY -- they are almost always different content")
+    if engine not in ENGINES:
+        raise BannerError(f"engine must be one of {ENGINES}, not '{engine}'")
     cw, ch = canvas
     names = _quoted(a.get("preserve"))
 
-    parts = [_FILL.format(cw=cw, ch=ch, marker=marker)]
-    if tier == "full":
-        parts.append(_PRESERVE.format(names=names))
+    if engine == "redraw":
+        bw, bh = size or (cw, cw)
+        parts = [_REDRAW_OPEN.format(bw=bw, bh=bh, cw=cw, ch=ch), _LAYOUT_LOCK]
+    else:
+        parts = [_FILL.format(cw=cw, ch=ch, marker=marker)]
+    if tier == "full" or engine == "redraw":
+        parts.append(_PRESERVE.format(names=names)
+                     if engine == "canvas" else
+                     f"KEEP THESE EXACTLY AS WRITTEN, character for character: "
+                     f"{names}. Same wording, same spelling, same punctuation. "
+                     f"They are what the client approved.")
     parts.append(_EXTEND.format(above=above, below=below))
 
     cut = str(a.get("cut_off") or "").strip()
@@ -451,6 +510,22 @@ def expansion_prompt(analysis: Dict[str, Any],
     decor = str(a.get("decor") or "").strip()
     if decor:
         parts.append(f"IN THE NEW AREAS: {decor}")
+
+    if engine == "redraw":
+        parts.append(
+            "REMOVE the small legal fine print at the bottom; it goes on again "
+            "later as an approved asset.")
+        parts.append(
+            f"DO NOT: no new text, numbers, logos or watermarks anywhere. Do "
+            f"not duplicate {names}. No blurred, stretched or mirrored bands. "
+            f"No borders, frames or vignettes. Keep every word inside the "
+            f"middle {cw}x1350 of the frame, with breathing margins -- the 4:5 "
+            f"crop is taken from there and ships beside the 9:16.")
+        parts.append(_OUTPUT.format(cw=cw, ch=ch))
+        edits = str(a.get("edits") or "").strip()
+        if edits:
+            parts.insert(2, f"ALSO APPLY THESE EDITS, and only these: {edits}")
+        return "\n\n".join(parts)
 
     parts.append(_SEAMLESS)
     if tier == "full":
@@ -503,9 +578,15 @@ khaki sand pastel monochrome sepia
 # off the edge pixels, and the marker is never read off anything.
 ALLOWED_COLOUR_WORDS = frozenset({"magenta"})
 
-# Measured against the full tier assembled from a real analysis. Longer than
-# this and the writer has started explaining rather than answering.
-MAX_PROMPT_CHARS = 2600
+# What the WRITER wrote, not what the banner says. Quoted copy is excluded from
+# the count: naming every printed line is the point of the PRESERVE block, and a
+# copy-heavy banner is not a rambling writer. AW027 (2026-09-02) was refused at
+# 3,196 characters against a cap measured on the canvas tier -- most of it the
+# eight lines of the client's own artwork, quoted twice as the format requires.
+#
+# The scaffolding of either engine is about 1,700 characters of prose with
+# modest answers, so this leaves roughly a thousand for the analysis itself.
+MAX_PROMPT_PROSE = 2800
 
 _QUOTED = re.compile(r'"[^"]*"|«[^»]*»|“[^”]*”')
 _PLACEHOLDER = re.compile(r"\[[^\]\n]{2,60}\]|\{[^}\n]{2,60}\}")
@@ -543,10 +624,14 @@ def check_prompt(text: str, expects_marker: bool = True) -> Dict[str, Any]:
         problems.append(
             f"has unfilled placeholders ({', '.join(left[:3])}) -- they reach "
             f"the model as literal text")
-    if len(text) > MAX_PROMPT_CHARS:
+    prose = len(_QUOTED.sub("", text))
+    if prose > MAX_PROMPT_PROSE:
         problems.append(
-            f"is {len(text)} characters, past the {MAX_PROMPT_CHARS} the full "
-            f"tier needs -- the writer has started explaining")
+            f"runs to {prose} characters of instruction (plus "
+            f"{len(text) - prose} of quoted copy, which is fine and does not "
+            f"count) against a budget of {MAX_PROMPT_PROSE} -- the writer has "
+            f"started explaining rather than answering. Shorten the analysis, "
+            f"not the quoted lines")
     if expects_marker and "magenta" not in text.lower() \
             and MARKER.lower() not in text.lower():
         problems.append(

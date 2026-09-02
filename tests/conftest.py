@@ -158,4 +158,4 @@ def banner_answers(**over):
         "frozen": "", "background": "", "seconds": 7,
     }
     answers.update(over)
-    return json.dumps(answers)
+    return json.dumps({k: v for k, v in answers.items() if v is not None})

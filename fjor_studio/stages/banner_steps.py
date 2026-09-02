@@ -55,6 +55,29 @@ def is_banner(job) -> bool:
     return has_banner
 
 
+def engine_of(job) -> str:
+    """Which expansion engine this banner job uses.
+
+    `canvas` (default) keeps the banner pixel-for-pixel and paints margins
+    around it. `redraw` re-renders the whole creative at 9:16, which is what a
+    photo-led banner usually needs -- their tool moved to it after live tests
+    because compositing "don't touch the square" gave sharpness seams,
+    picture-in-picture and duplicate faces (r146, 2026-08-16). SL040 reproduced
+    all three.
+
+    They are not the same promise, and the difference is not a detail: a redraw
+    leaves no original pixels, so nothing arithmetic can vouch for it."""
+    chosen = str((getattr(job, "intake", None) or {}).get("banner_engine")
+                 or "canvas").strip().lower()
+    if chosen not in banner.ENGINES:
+        raise GenError(
+            f"'{chosen}' is not a banner engine (have: "
+            f"{', '.join(banner.ENGINES)}). `canvas` keeps the banner exactly "
+            f"and paints the margins; `redraw` re-formats the whole creative "
+            f"to fill 9:16.")
+    return chosen
+
+
 def _state(job) -> Dict[str, Any]:
     return job.meta.setdefault("banner", {})
 
@@ -83,13 +106,24 @@ def intake(ctx: StageContext) -> None:
     ctx.job.add_artifact("ref", f"ref/{dest.name}")
 
     w, h = banner.measure(dest)
+    scale = banner.upscale_of(w)
+    if scale > banner.MIN_BANNER_SCALE:
+        raise GenError(
+            f"this banner is {w}x{h}, which the canvas would enlarge {scale}x to "
+            f"fill 1080 wide -- it is a thumbnail, not the artwork. Everything "
+            f"downstream would then preserve a blurry upscale perfectly and "
+            f"report success. Find the original file; check the source, because "
+            f"a name like '{src.name[:60]}' can claim a size the file does not "
+            f"have.")
     place = banner.placement(w, h)
     _state(ctx.job).update({"source": f"ref/{dest.name}", "width": w,
                             "height": h, "placement": place,
                             "needs_expansion": bool(place["top"] or place["bottom"])})
     ctx.job.add_event(
         "banner_intake",
-        f"{w}x{h} banner; " + (
+        f"{w}x{h} banner"
+        + (f", enlarged {scale}x to fill the canvas" if scale > 1.2 else "")
+        + "; " + (
             f"{place['top']}px to paint above and {place['bottom']}px below"
             if place["top"] or place["bottom"]
             else "already vertical -- nothing to expand"))
@@ -126,8 +160,22 @@ Return ONE JSON object and nothing else:
 def plan(ctx: StageContext) -> None:
     """The compact brain: one call, and every prompt is assembled from it."""
     src = ctx.job_dir / _state(ctx.job)["source"]
-    brief = PLAN_BRIEF.format(animation=banner.ANIMATION_QUESTIONS.strip())
-    if str(ctx.job.intake.get("brief") or "").strip():
+    engine = engine_of(ctx.job)
+    edits = str(ctx.job.intake.get("brief") or "").strip()
+    if engine == "redraw":
+        # A redraw has no canvas to point at, so the model must be told what
+        # the picture IS: the four analysis questions earn their place here,
+        # which is the engine they were written for.
+        brief = REDRAW_BRIEF.format(
+            expansion=banner.ANALYSIS_QUESTIONS.strip(),
+            animation=banner.ANIMATION_QUESTIONS.strip(),
+            edits=(f"\n\nThe producer asks for these changes to the visual, and "
+                   f"ONLY these: {edits}\nPut them in an \"edits\" field as one "
+                   f"sentence. Everything they do not mention stays as printed."
+                   if edits else ""))
+    else:
+        brief = PLAN_BRIEF.format(animation=banner.ANIMATION_QUESTIONS.strip())
+    if engine == "canvas" and edits:
         # An edit inside the banner would be painted by the expansion and then
         # immediately overwritten when the original is re-composited over its own
         # rectangle. Saying so is the only honest option: a brief silently not
@@ -145,10 +193,21 @@ def plan(ctx: StageContext) -> None:
         ctx.job.spend("prompts", "banner plan", result.credits, result.backend)
     answers = _parse_answers(result.text)
     animation = banner.animation_prompt(answers)
-    _state(ctx.job).update({"answers": answers,
-                            "expansion_prompt": banner.fill_prompt()})
+    state = _state(ctx.job)
+    if engine == "redraw":
+        prompt = banner.expansion_prompt(
+            answers, engine="redraw",
+            size=(state["width"], state["height"]))
+        verdict = banner.check_prompt(prompt, expects_marker=False)
+        if not verdict["ok"]:
+            raise GenError("the banner analysis produced a prompt that cannot "
+                           "be sent: " + "; ".join(verdict["problems"]))
+    else:
+        prompt = banner.fill_prompt()
+    state.update({"answers": answers, "engine": engine,
+                  "expansion_prompt": prompt})
     scene = Scene(idx=0)
-    scene.image_prompt = banner.fill_prompt()
+    scene.image_prompt = prompt
     scene.video_prompt = animation["prompt"]
     scene.duration_s = float(animation["seconds"])
     # Silent, and with no line to speak: `voiceovers` then has nothing to do,
@@ -161,6 +220,32 @@ def plan(ctx: StageContext) -> None:
     ctx.job.add_event(
         "banner_plan",
         f"{len(answers.get('movers') or [])} mover(s), {animation['seconds']}s")
+
+
+REDRAW_BRIEF = """A finished, client-approved advertising banner is attached. It
+is going to be RE-FORMATTED to vertical 9:16 -- the photograph re-framed for the
+taller shape and the type re-set to suit it, with every word kept as written --
+and then animated.
+
+You are NOT writing the prompts. You are answering questions, and both prompts
+are built from your answers. Study the banner first.
+
+{expansion}
+
+{animation}
+
+Return ONE JSON object and nothing else:
+
+{{
+  "tier": "short" | "full",
+  "above": "...", "below": "...",   // Q1, the two edges, separately
+  "cut_off": "...", "leave_cropped": "...",
+  "preserve": ["...", "..."],       // Q3: every word printed, verbatim
+  "decor": "...",
+  "graphic": true | false,
+  "movers": ["...", "..."], "central": "...",
+  "frozen": "...", "background": "...", "seconds": 5..10
+}}{edits}"""
 
 
 def _parse_answers(text: str) -> Dict[str, Any]:
@@ -225,22 +310,36 @@ def expand(ctx: StageContext) -> None:
     # moment the prompt changed under it, leaving a retry about to re-send the
     # very text that caused the failure. The scene is corrected too, or the page
     # would show a producer a prompt that is not the one sent.
-    prompt = banner.fill_prompt()
-    state["expansion_prompt"] = prompt
-    if scene.image_prompt != prompt:
-        scene.image_prompt = prompt
-        ctx.job.put_scene(scene)
+    if engine_of(ctx.job) == "canvas":
+        # The canvas fill instruction is FIXED, so a copy stored on the job can
+        # only go stale -- as AW025's did the moment the prompt changed under
+        # it. The REDRAW prompt is the opposite: it is written per banner from
+        # that banner's own analysis, so it is read from the job, not rebuilt.
+        prompt = banner.fill_prompt()
+        state["expansion_prompt"] = prompt
+        if scene.image_prompt != prompt:
+            scene.image_prompt = prompt
+            ctx.job.put_scene(scene)
+    else:
+        prompt = str(state.get("expansion_prompt") or scene.image_prompt or "")
+        if not prompt:
+            raise GenError("no redraw prompt on this job -- revise `prompts`, "
+                           "which is where it is written")
+
+    if engine_of(ctx.job) == "redraw":
+        return _redraw(ctx, scene, src, prompt, model, settings, note)
 
     if not state.get("needs_expansion"):
         # Already vertical. There is nothing to paint, so there is nothing to
         # check either -- the frame IS the banner.
         dest = ctx.dir("plates") / "banner_916.png"
         shutil.copy2(src, dest)
-        expanded = dest
+        expanded, cleaned = dest, None
     else:
         canvas = banner.build_canvas(src, ctx.dir("plates") / "canvas.png")
         ctx.job.add_artifact("plates", "plates/canvas.png")
         expanded, refusal = None, ""
+        cleaned = None
         for attempt in range(1, settings.plates_max_attempts + 1):
             out = ctx.dir("plates") / f"expanded_{attempt:02d}.png"
             if not redo and out.exists() and _usable(src, out, place):
@@ -263,6 +362,8 @@ def expand(ctx: StageContext) -> None:
                         f"({survived['changed_pixels']} pixels still differ). "
                         f"This is our own arithmetic, not the model's doing.")
                 state["survived"], state["judged"] = survived, judged
+                cleaned = _remove_small_print(ctx, scene, expanded, src,
+                                              place, model)
                 break
             result = run_generation(
                 ctx, scene, "image", model,
@@ -301,38 +402,48 @@ def expand(ctx: StageContext) -> None:
                            f"{judged['limit']})")
                 continue
 
+            # The model contributed MARGINS. Everything else it returned is a
+            # rescaled approximation of pixels we already have, so ours go back
+            # and the banner is exact by construction.
+            expanded = banner.recomposite(
+                src, candidate, ctx.dir("plates") / "expanded.png", place)
+            ctx.job.add_artifact("plates", "plates/expanded.png")
+            # And now PROVE it: both frames are exactly the canvas size, so the
+            # strict pixel count applies again and says whether the re-composite
+            # really put our banner back. A guarantee by construction that is
+            # never checked is a guarantee by hope.
+            survived = banner.banner_survived(src, expanded, place)
+            if not survived["intact"]:
+                raise GenError(
+                    f"re-compositing did not restore the banner "
+                    f"({survived['changed_pixels']} pixels still differ). "
+                    f"This is our own arithmetic, not the model's doing.")
+            ctx.job.add_event(
+                "banner_survived",
+                f"attempt {attempt}: the banner is back exactly "
+                f"({survived['changed_pixels']} changed pixels)", **survived)
+
+            # QA JUDGES THE FRAME THAT SHIPS, not the model's raw return.
+            # SL040 (2026-09-02) reported garbled text in the footer and a
+            # duplicated face -- of which the first had already been repaired by
+            # the re-composite two lines above, and the second had not. A
+            # verdict about a frame nobody delivers tells a producer nothing
+            # they can act on, and hides what it should have caught. Rule 4.
+            final = _remove_small_print(ctx, scene, expanded, src, place, model)
             scene = ctx.job.scene(0)
             scene.plate_attempts = attempt
-            verdict = _run_media_qa(ctx, scene, "plate", candidate, prompt)
+            verdict = _run_media_qa(ctx, scene, "plate", final, prompt)
             scene.plate_qa = verdict.as_dict() if verdict else None
             ctx.job.put_scene(scene)
             ctx.store.save(ctx.job)
             if verdict is None or not should_regenerate(
                     verdict, "plate", attempt, settings):
-                # The model contributed MARGINS. Everything else it returned is
-                # a rescaled approximation of pixels we already have, so ours go
-                # back and the banner is exact by construction.
-                expanded = banner.recomposite(
-                    src, candidate, ctx.dir("plates") / "expanded.png", place)
-                ctx.job.add_artifact("plates", "plates/expanded.png")
-                # And now PROVE it: both frames are exactly the canvas size, so
-                # the strict pixel count applies again and says whether the
-                # re-composite really put our banner back. A guarantee by
-                # construction that is never checked is a guarantee by hope.
-                survived = banner.banner_survived(src, expanded, place)
-                if not survived["intact"]:
-                    raise GenError(
-                        f"re-compositing did not restore the banner "
-                        f"({survived['changed_pixels']} pixels still differ). "
-                        f"This is our own arithmetic, not the model's doing.")
-                ctx.job.add_event(
-                    "banner_survived",
-                    f"attempt {attempt}: the banner is back exactly "
-                    f"({survived['changed_pixels']} changed pixels)", **survived)
                 state["survived"] = survived
                 state["judged"] = judged
+                cleaned = final
                 break
-            refusal = f"QA called the expansion critical: {'; '.join(verdict.issues)}"
+            expanded = None
+            refusal = f"QA called the plate critical: {'; '.join(verdict.issues)}"
             ctx.job.add_event("qa_regen", f"attempt {attempt}: {refusal}",
                               issues=verdict.issues)
         if expanded is None:
@@ -343,13 +454,77 @@ def expand(ctx: StageContext) -> None:
                 f"worse than shipping nothing. Look at the attempts in plates/ "
                 f"before spending more.")
 
-    cleaned = _remove_small_print(ctx, scene, expanded, src, place, model)
+    if cleaned is None:                     # the already-vertical path
+        cleaned = _remove_small_print(ctx, scene, expanded, src, place, model)
     scene = ctx.job.scene(0)
     scene.plate = f"plates/{cleaned.name}"
     ctx.job.put_scene(scene)
     ctx.job.add_artifact("plates", scene.plate)
     _consume(ctx, "plates")
     ctx.store.save(ctx.job)
+
+
+def _redraw(ctx: StageContext, scene, src: Path, prompt: str, model: str,
+            settings, note: str) -> None:
+    """Re-render the whole creative at 9:16.
+
+    Nothing arithmetic can vouch for this. `banner_survived` and `same_picture`
+    both compare against pixels we placed ourselves, and a redraw places none --
+    the layout is MEANT to change. So QA is the only guard, and it is therefore
+    not optional here: running a redraw with QA switched off would be a stage
+    that cannot fail, which is the one thing this pipeline does not ship."""
+    from .paid import run_generation
+    from .steps import _run_media_qa, _steer
+    from ..qa import should_regenerate
+
+    if not settings.runs_for("plate"):
+        raise GenError(
+            "the redraw engine needs plate QA, and it is switched off. A redraw "
+            "leaves no original pixels, so no arithmetic check can vouch for it "
+            "-- QA is the only thing standing between a re-formatted banner and "
+            "a rewritten one. Turn qa.plates on, or use the canvas engine, "
+            "which keeps the banner pixel-for-pixel and can prove it.")
+
+    refusal = ""
+    for attempt in range(1, settings.plates_max_attempts + 1):
+        out = ctx.dir("plates") / f"redraw_{attempt:02d}.png"
+        result = run_generation(ctx, scene, "image", model,
+                                _steer(prompt, note), out,
+                                params={"resolution": "2K"},
+                                medias=[str(src)], stage="plates",
+                                label=f"redraw attempt {attempt}")
+        candidate = Path(result.files[0])
+        ctx.job.add_artifact("plates", f"plates/{candidate.name}")
+        got = banner.measure(candidate)
+        ctx.job.add_event(
+            "banner_redrawn",
+            f"attempt {attempt}: re-formatted to {got[0]}x{got[1]}",
+            returned=list(got))
+
+        scene = ctx.job.scene(0)
+        scene.plate_attempts = attempt
+        verdict = _run_media_qa(ctx, scene, "plate", candidate, prompt)
+        scene.plate_qa = verdict.as_dict() if verdict else None
+        ctx.job.put_scene(scene)
+        ctx.store.save(ctx.job)
+        if verdict is None or not should_regenerate(
+                verdict, "plate", attempt, settings):
+            scene = ctx.job.scene(0)
+            scene.plate = f"plates/{candidate.name}"
+            ctx.job.put_scene(scene)
+            ctx.job.add_artifact("plates", scene.plate)
+            _state(ctx.job)["redrawn"] = {"returned": list(got),
+                                          "attempts": attempt}
+            ctx.store.save(ctx.job)
+            return
+        refusal = "; ".join(verdict.issues)
+        ctx.job.add_event("qa_regen", f"attempt {attempt}: {refusal}",
+                          issues=verdict.issues)
+    raise GenError(
+        f"the redraw failed QA on all {settings.plates_max_attempts} attempts "
+        f"-- {refusal}. Look at the attempts in plates/. A banner whose copy or "
+        f"layout the model will not hold is one to expand with the canvas "
+        f"engine instead, which cannot rewrite it.")
 
 
 def _usable(src: Path, candidate: Path, place: Dict[str, Any]) -> bool:

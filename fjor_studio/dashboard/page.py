@@ -187,7 +187,9 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
          step="0.1" placeholder="config default"></div>
   </div>
   <div class="hint" id="vertWarn" style="margin-top:6px;min-height:14px"></div>
-  <div style="margin-top:6px"><label>Brief — anything the pipeline should know</label>
+  <div style="margin-top:6px"><label>Brief — anything the pipeline should know<span
+      id="briefBanner" style="display:none;text-transform:none;letter-spacing:0"> ·
+      for a re-formatted banner this is where visual changes go</span></label>
     <textarea name="brief" id="f_brief" placeholder="Angle, must-haves, what to avoid, who it is for. This outranks the house guidance where they disagree."></textarea></div>
   <div style="margin-top:12px"><label>Source</label>
     <div class="drop" id="drop">
@@ -199,6 +201,14 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
     <input type="file" id="dropInput" accept="video/*,image/*" style="display:none">
   </div>
   <div id="modeNote" class="hint" style="margin-top:8px;min-height:14px"></div>
+  <div id="bannerOnly" style="display:none">
+    <div style="margin-top:12px"><label>How to reach 9:16</label>
+      <select name="banner_engine" id="f_bengine">
+        <option value="redraw">Re-format — re-lay the whole creative to fill the frame</option>
+        <option value="canvas">Extend — keep the banner exactly, paint the margins</option>
+      </select>
+      <div class="hint" id="bengineNote" style="margin-top:4px"></div></div>
+  </div>
   <div id="ugcOnly">
     <div style="margin-top:12px"><label>Reference kind</label>
       <select name="ref_kind" id="f_refkind"></select>
@@ -901,6 +911,7 @@ function renderMain(){
     html+=`<button ${busy?'disabled':''} onclick="openDerive()">Make a variation…</button>`;
   if(!STATE.terminal.includes(d.state)||d.state==='failed')
     html+=`<button class="danger" ${busy?'disabled':''} onclick="act('cancel')">Cancel</button>`;
+  html+=`<button class="danger" ${busy?'disabled':''} onclick="deleteJob()">Delete…</button>`;
   if(busy) html+='<span class="muted">queued…</span>';
   html+='</div></div>';
 
@@ -1010,6 +1021,21 @@ function mountDraft(rel){
   }
   if(DRAFT_NODE.parentNode!==slot) slot.appendChild(DRAFT_NODE);
 }
+// Frees the creative id, which is the usual reason to want it: a cancelled
+// attempt still holds its number. Nothing is unlinked -- the job moves into
+// jobs/_deleted/ and its media is recoverable.
+async function deleteJob(){
+  const d=DETAIL;
+  const spent=d.spent>0?`\n\nIt has spent ${d.spent} credits. The files move to `
+    +`jobs/_deleted/ and are recoverable.`:'';
+  if(!confirm(`Delete ${d.id} and free its id?${spent}`)) return;
+  try{
+    await api(`/api/jobs/${d.id}/delete`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:'{}'});
+    CUR=null; await refresh();
+  }catch(e){ alert(e.message); }
+}
+
 async function act(action,payload){
   try{ await api(`/api/jobs/${CUR}/${action}`,{method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -1263,6 +1289,9 @@ function showMode(u){
   if(!u){ note.textContent=''; if(ugc) ugc.style.display=''; return; }
   const banner=u.kind==='banner';
   if(ugc) ugc.style.display=banner?'none':'';
+  const bo=$('#bannerOnly'); if(bo) bo.style.display=banner?'':'none';
+  const bb=$('#briefBanner'); if(bb) bb.style.display=banner?'':'none';
+  bengineNote();
   if(!banner){
     note.className='hint';
     note.innerHTML='<b>UGC pipeline</b> — the reference is analysed, a plan is written, '
@@ -1283,6 +1312,20 @@ function dropBusy(pct){
     <div class="hint">${pct}%</div>
     <div class="bar"><i style="width:${pct}%"></i></div>`;
 }
+// The two engines are not the same promise, and the difference decides whether
+// a producer should trust the result or check it.
+function bengineNote(){
+  const el=$('#bengineNote'); if(!el) return;
+  el.innerHTML = $('#f_bengine').value==='canvas'
+    ? 'The banner comes back with <b>zero changed pixels</b> — proven every run. '
+      +'Margins are painted above and below. On a photo-led banner this can seam '
+      +'or duplicate a face, which is why re-format is the default.'
+    : 'The model re-lays the whole creative for the taller frame. Nothing '
+      +'arithmetic can vouch for it — <b>QA is the only guard</b>, so it must be '
+      +'on. Brief edits to the visual ARE applied in this mode.';
+}
+$('#f_bengine').addEventListener('change',bengineNote);
+
 function dropDone(u){
   // a banner is often well under a megabyte, and "0.0 MB" reads as broken
   const mb=u.size>=1048576?(u.size/1048576).toFixed(1)+' MB'
@@ -1420,7 +1463,11 @@ $('#createBtn').onclick=async()=>{
   // Hidden is not the same as absent. A transformation typed before the banner
   // was dropped would otherwise be carried into a job whose writer never reads
   // it -- a setting the producer believes is in force and nothing consults.
-  fd.forEach((v,k)=>{ if(v!==''&&!(banner&&(k==='morph'||k==='text_card'||k==='ref_kind'))) body[k]=v; });
+  fd.forEach((v,k)=>{
+    if(v==='') return;
+    if(banner&&(k==='morph'||k==='text_card'||k==='ref_kind')) return;
+    if(!banner&&k==='banner_engine') return;
+    body[k]=v; });
   try{
     const r=await api('/api/jobs',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

@@ -1,5 +1,6 @@
 """The dashboard, driven over real HTTP against a real server."""
 import json
+import pathlib
 import threading
 import urllib.error
 import urllib.request
@@ -1284,3 +1285,36 @@ def test_but_a_missing_key_still_stops_a_job_before_anything_is_bought(tmp_path,
     assert "api_key" in job.error and "intake" in job.error
     assert job.spent == 0                           # nothing was bought
     assert "Load a kit" in job.error                # and it says what to do
+
+
+# -- retiring a job, and getting its id back ---------------------------------
+
+def test_deleting_a_job_frees_its_id_and_unlinks_nothing(live):
+    """A cancelled attempt still holds its number, which is the usual reason to
+    want this. Nothing is destroyed: the job moves to jobs/_deleted/."""
+    base, studio, store, job = live
+    cfg, _s, _e = studio.open()
+    assert job.id in store.list_ids()
+    _st, out = post(f"{base}/api/jobs/{job.id}/delete")
+    assert out["id"] == job.id
+    assert job.id not in store.list_ids()             # the id is free again
+    moved = pathlib.Path(out["moved_to"])
+    assert moved.is_dir() and (moved / "job.json").is_file()
+    assert "_deleted" in str(moved)
+
+
+def test_a_running_job_is_not_deleted_out_from_under_itself(live, monkeypatch):
+    """Removing a directory mid-stage loses a generation that may already be
+    paid for."""
+    base, studio, _store, job = live
+    monkeypatch.setattr(studio.worker, "queued_for", lambda _id: "run")
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        post(f"{base}/api/jobs/{job.id}/delete")
+    assert exc.value.code == 400
+    assert "Cancel it first" in exc.value.read().decode()
+
+
+def test_the_page_offers_it_and_says_what_it_costs():
+    from fjor_studio.dashboard.page import PAGE
+    for needle in ("Delete…", "deleteJob()", "free its id", "recoverable"):
+        assert needle in PAGE, needle

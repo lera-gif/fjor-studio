@@ -229,7 +229,7 @@ def test_a_colour_word_is_caught_but_a_quoted_headline_is_not():
 def test_the_checks_catch_what_their_tool_shouted_about():
     assert "unfilled placeholders" in " ".join(
         check_prompt("replace the magenta with [what continues up]")["problems"])
-    assert "past the" in " ".join(
+    assert "started explaining" in " ".join(
         check_prompt("magenta. " + "a sentence about the extension. " * 200)["problems"])
     # a fill instruction that never says what to fill
     assert "never mentions the marker" in " ".join(
@@ -456,3 +456,23 @@ def test_a_licensed_band_keeps_its_ground_and_not_one_row_more(tmp_path):
     verdict = banner_survived(b, back, info, licensed=SMALL_PRINT_BAND)
     assert verdict["intact"] is True          # the headline is ours again
     assert verdict["edit_applied"] is True    # and the small print really went
+
+
+def test_quoted_client_copy_does_not_count_as_the_writer_explaining(tmp_path):
+    """AW027 (2026-09-02) was refused at 3,196 characters -- most of it the eight
+    lines printed on the client's own artwork, quoted twice because the PRESERVE
+    and DO-NOT blocks both require it. Naming every printed line is the point;
+    a copy-heavy banner is not a rambling writer."""
+    from fjor_studio.banner import MAX_PROMPT_PROSE, check_prompt, expansion_prompt
+    copy = [f"line number {i} of a wordy client banner" for i in range(30)]
+    prompt = expansion_prompt(
+        {"above": "the border continues", "below": "the ground continues",
+         "cut_off": "nothing is cut off", "preserve": copy, "decor": "keep clean"},
+        engine="redraw", size=(1080, 1080))
+    assert len(prompt) > MAX_PROMPT_PROSE          # long, because of the copy
+    assert check_prompt(prompt, expects_marker=False)["ok"] is True
+
+    rambling = "Replace the magenta. " + "The writer explains at length. " * 100
+    problems = check_prompt(rambling)["problems"]
+    assert any("started explaining" in p for p in problems)
+    assert any("does not count" in p for p in problems)

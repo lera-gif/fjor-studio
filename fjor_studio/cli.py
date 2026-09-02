@@ -68,6 +68,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                    help="how to treat a VIDEO reference: 'ugc' re-creates the "
                         "idea; 'replica' reproduces its own look, with stills "
                         "cut from it and attached to every plate")
+    n.add_argument("--banner-engine", default=None, choices=("canvas", "redraw"),
+                   help="banner mode only. 'canvas' keeps the banner "
+                        "pixel-for-pixel and paints margins around it; "
+                        "'redraw' re-formats the whole creative to fill 9:16, "
+                        "which a photo-led banner usually needs -- and which "
+                        "no arithmetic check can vouch for, so QA must be on")
     n.add_argument("--morph", default="",
                    help="a transformation on camera, with no cut: what changes. "
                         "One shot carries it and buys TWO plates")
@@ -130,6 +136,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     dv.add_argument("--music", default=None)
     dv.add_argument("--crossfade-s", type=float, default=None)
     dv.add_argument("--run", action="store_true")
+
+    d = sub.add_parser("delete", help="retire a job and free its creative id")
+    d.add_argument("job_id")
 
     c = sub.add_parser("cancel", help="stop a job")
     c.add_argument("job_id")
@@ -238,7 +247,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                   "packshot": args.packshot, "demo": args.demo,
                   "demo_trim_s": args.demo_trim_s}
         for flag, key in (("ref_kind", "ref_kind"), ("morph", "morph"),
-                          ("text_card", "text_card")):
+                          ("text_card", "text_card"),
+                          ("banner_engine", "banner_engine")):
             value = str(getattr(args, flag, "") or "").strip()
             if value:
                 intake[key] = value
@@ -258,6 +268,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             job = engine.run(job)
         _print_job(job, verbose=True)
         return 1 if job.state == "failed" else 0
+
+    if args.cmd == "delete":
+        moved = store.delete(args.job_id)
+        print(f"{args.job_id} retired to {moved} -- its id is free again, and "
+              f"nothing was unlinked")
+        return 0
 
     if args.cmd == "derive":
         from .derive import DeriveError, derive as do_derive
