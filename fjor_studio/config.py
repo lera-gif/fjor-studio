@@ -110,6 +110,7 @@ class Config:
     auth: Dict[str, Any] = field(default_factory=dict)
     verticals: Dict[str, Any] = field(default_factory=dict)
     delivery: Dict[str, Any] = field(default_factory=dict)
+    lore: Dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self) -> str:
         """Redacted, always, because a repr is not asked for -- it happens.
@@ -224,6 +225,17 @@ def load(home: Optional[Path] = None) -> Config:
         # the dashboard token, which is not a provider credential
         auth = _deep_merge(auth, session)
     verticals = _read(cfg_dir / "verticals.yaml")
+    lore = _read(cfg_dir / "lore.yaml")
+    # Lore for a vertical nobody registered would never be read, and a silent
+    # no-op is how a producer comes to believe a niche is configured when it is
+    # not. The registry is the authority on what exists.
+    stray = sorted(set((lore.get("lore") or {}))
+                   - set((verticals.get("verticals") or {})))
+    if stray:
+        raise UnknownVertical(
+            f"config/lore.yaml has lore for {', '.join(stray)}, which "
+            f"verticals.yaml does not register -- so nothing would ever read "
+            f"it. Register them, or remove the lore.")
     delivery = _deep_merge(DEFAULT_DELIVERY, _read(cfg_dir / "delivery.yaml"))
     # the env var wins: one checkout, several machines, no edit to a tracked file
     env_root = os.environ.get("FJOR_STUDIO_DELIVERY_ROOT")
@@ -231,5 +243,5 @@ def load(home: Optional[Path] = None) -> Config:
         delivery["root"] = env_root
     if os.environ.get("FJOR_STUDIO_BACKEND") == "mock":
         models["providers"] = {k: "mock" for k in models.get("providers", {})}
-    return Config(home=home, pipeline=pipeline, models=models, auth=auth,
+    return Config(home=home, pipeline=pipeline, models=models, auth=auth, lore=lore,
                   verticals=verticals, delivery=delivery)

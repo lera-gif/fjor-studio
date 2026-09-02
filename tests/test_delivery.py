@@ -234,3 +234,33 @@ def test_the_v4_niches_are_registered_with_the_prefixes_already_in_use():
     assert cfg["apostolic_walking"]["folder"] == "APOSTOLIC WALKING"
     prefixes = [v["prefix"] for v in cfg.values()]
     assert len(prefixes) == len(set(prefixes)), "two verticals share a prefix"
+
+
+def test_every_registered_vertical_resolves_both_ways(home, reference):
+    """A vertical is two lookups -- name to folder at delivery, prefix back to
+    name when a creative name is pasted in. A registry entry that only works one
+    way sends finished files somewhere nobody looks."""
+    import pathlib as _pl
+
+    from fjor_studio import config as config_mod
+    cfg = config_mod.load(_pl.Path(__file__).resolve().parents[1])
+    registry = cfg.verticals["verticals"]
+    prefixes = [str(e["prefix"]).upper() for e in registry.values()]
+    assert len(prefixes) == len(set(prefixes)), f"duplicate prefix in {prefixes}"
+    for name, entry in registry.items():
+        assert cfg.vertical(name, strict=True)["folder"] == entry["folder"]
+        assert cfg.vertical_for_prefix(entry["prefix"]) == name
+        assert entry["folder"] == entry["folder"].strip()
+        assert entry["folder"].upper() == entry["folder"], "folders are upper-case on disk"
+
+
+def test_the_new_vertical_is_registered(home, reference):
+    """Strong Legs, added 2026-09-02. SL is the live prefix; SLS was mine and
+    the owner corrected it before anything shipped under it."""
+    import pathlib as _pl
+
+    from fjor_studio import config as config_mod
+    cfg = config_mod.load(_pl.Path(__file__).resolve().parents[1])
+    assert cfg.vertical("strong_legs", strict=True) == {
+        "prefix": "SL", "folder": "STRONG LEGS"}
+    assert cfg.vertical_for_prefix("SL") == "strong_legs"

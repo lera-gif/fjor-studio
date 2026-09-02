@@ -25,3 +25,23 @@ verticals:
   # allocated against that folder has to agree with them.
   back_pain:        {prefix: BPR,   folder: "BACK PAIN RELIEF"}
   apostolic_walking: {prefix: APW,  folder: "APOSTOLIC WALKING"}
+  # New for testing, 2026-09-02. SL is the LIVE prefix, corrected by the owner
+  # the same day -- SLS was mine and wrong. The folder does not exist on the
+  # delivery tree yet; `delivery` creates it on the first finished creative.
+  strong_legs:      {prefix: SL,    folder: "STRONG LEGS"}
+
+  # ── NUTRITION ─────────────────────────────────────────────────────────────
+  # Added 2026-09-02 for the nutrition producers, who work from the share copy.
+  # Every vertical above is ACTIVITY; these four are the first food ones, and
+  # the pipeline treats them no differently -- only their lore does.
+  #
+  # PROVISIONAL, and the only part of this file that is: nothing has shipped
+  # under these prefixes, no folder for them exists on the delivery tree, and
+  # there was nothing to read them off. The folder names are the product names
+  # from the colleague's own templates ("Mediterranean Diet", "Cortisol Diet",
+  # "Biblical Diet"); the prefixes are ours. Correct both against the live tree
+  # before the first delivery, while it is still cheap.
+  mediterranean_diet:   {prefix: MED,  folder: "MEDITERRANEAN DIET"}
+  cortisol_diet:        {prefix: CORT, folder: "CORTISOL DIET"}
+  biblical_diet:        {prefix: BIB,  folder: "BIBLICAL DIET"}
+  intermittent_fasting: {prefix: IF,   folder: "INTERMITTENT FASTING"}

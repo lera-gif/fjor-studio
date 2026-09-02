@@ -682,6 +682,43 @@ printed. `fjor-studio config` uses it.
 
 ---
 
+### 3.4i Niche knowledge is ported, never invented
+
+The pipeline knew a vertical's PREFIX and FOLDER and nothing else. Everything
+that decides whether a creative is right for its niche -- the mechanic, the words
+that must appear, the words that break it, the objections kept verbatim, who may
+be on camera -- lived in documents beside the work and reached a creative only if
+a producer retyped some of it into a brief.
+
+- **Ported, and the provenance is the value.** Ten entries come from
+  fjor-video, which carries them from the client's own meta-templates; two more
+  are distilled from the colleague's `NICHE_TEMPLATES`. A plausible invention
+  here outranks both the reference and the producer's note, and nobody
+  downstream can tell an invented rule from a client one. A drift test compares
+  every ported field against its source, because a stale niche rule is worse
+  than none: it reads as current.
+- **The negatives are appended by the CODE, not asked of the writer.** The
+  source templates call that list mandatory for every generation, and a list a
+  language model is asked to reproduce is a list that drifts. The niche's own
+  hero props travel with it as `keep_out_of_negatives` -- a mat in back pain,
+  walking shoes in apostolic -- so the exclusion cannot remove the subject.
+- **Lore does not outrank the reference**, and the block says so where the
+  writer reads it: mirror the reference, change only what breaks the niche.
+- **A registered vertical may have no lore**; it simply gets none. Lore for a
+  vertical nobody registered is REFUSED at config load, because it would never
+  be read, and a silent no-op is how a producer comes to believe a niche is
+  configured when it is not.
+- **A diet vertical forbids the time lexicon an activity vertical requires.**
+  "Just five minutes a day" IS the offer in back pain and apostolic walking; the
+  identical phrase in Mediterranean or Cortisol makes a food product sound like
+  an exercise ad and is categorically banned, with frequency replacing it. Both
+  halves are held by one test, because that is the rule that erodes when someone
+  edits one family thinking about the other.
+- **Three entries carry their source's own warning** and it is preserved:
+  `lipedema_pilates`, `yoga_men` and `bp_walking` are house-pattern
+  extrapolation rather than client knowledge. Their mechanics and safety blocks
+  are the parts to trust.
+
 ## 4. Module map
 
 ```
@@ -712,6 +749,7 @@ fjor_studio/
   banner.py            the canvas, the survival check, the two playbooks
   refkind.py           ugc or replica: what a reference IS, and its style frames
   kit.py               keys the producer brings, held in memory, never written
+  lore.py              what a vertical IS, in the writer's hands
   drivers.py           motion drivers: engine, length, the writer's rules
   stages/paid.py       THE path through which money is spent
   stages/steps.py      one handler per state
@@ -722,7 +760,7 @@ fjor_studio/
   cli.py               new / run / approve / revise / retry / status / config
 ```
 
-531 tests, all of which execute the code rather than inspecting it.
+543 tests, all of which execute the code rather than inspecting it.
 
 ---
 

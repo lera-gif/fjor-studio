@@ -1,0 +1,1090 @@
+# Creative lore, one entry per vertical: what this niche IS, and what breaks it.
+#
+# PORTED, NEVER INVENTED. Ten entries come from fjor-video/config/verticals.yaml,
+# which carries them from the client's own META-TEMPLATE_<vertical>_EN.md files;
+# `back_pain` and `apostolic_walking` are distilled from the colleague's
+# NICHE_TEMPLATES, which fjor-video has no entry for. Nothing here is written from
+# imagination, and nothing should be: this is the deepest input the pipeline has,
+# and a plausible invention in it outranks the reference and the producer's note.
+#
+# The four NUTRITION entries (mediterranean_diet, cortisol_diet, biblical_diet,
+# intermittent_fasting) are distilled from the colleague's NICHE_TEMPLATES too.
+# They carry the rule that most often goes wrong across the two families: a diet
+# vertical FORBIDS the time lexicon that an activity vertical REQUIRES.
+#
+# Three of the ported entries -- lipedema_pilates, yoga_men, bp_walking -- are
+# marked in their source as house-pattern EXTRAPOLATION rather than client
+# knowledge, written 2026-08-17 from the neighbouring blocks. Treat their
+# audience claims, objections and anchors as first drafts to correct against real
+# performance; the mechanics, safety blocks and negative tokens are the parts to
+# trust. Replace any of them the moment a real meta-template exists.
+#
+# A VERTICAL IS A THEME, NOT AN IDENTITY (owner rule, 2026-08-04). Every vertical
+# here is the angle a general fitness programme is wrapped in. The audience -- and
+# the person shown -- is an ordinary adult who wants to get fitter, never a member
+# of the profession or patient group the vertical names.
+#
+# The registry (prefix, folder) lives in verticals.yaml and ONLY there. A vertical
+# may be registered with no lore; it simply gets none. A lore entry for a vertical
+# nobody registered is refused, because it would never be read.
+
+lore:
+  apostolic_walking:
+    anchors:
+    - no gym, no equipment -- just your shoes and the road
+    - walk at a pace where you can still hold a conversation
+    - it's not the steps, it's that you never miss a day
+    - consistency beats intensity
+    - walking is the only exercise I could actually keep doing
+    - thirty minutes after Sunday service, every day
+    - forty days, forty walks
+    cast_lock: 'gender and speaker count preserved absolutely. Default skew female 45-70,
+      with men 60+ a legitimate secondary segment -- mirror the reference. TWO typage pools,
+      one per creative and never blended: white 50-70 (US, Ireland, Italy, Poland), or Latin-American
+      / US-Hispanic 45-65. The expert is NEVER invented and is always a LAYPERSON -- a parish
+      or community walking-group leader, 55-70, warm, in a polo shirt or cardigan. A priest,
+      pastor, deacon or nun is NEVER the seller, the expert or the face of the offer; third-person
+      mention is warm and fine. Body-weight anchoring is the number-one pipeline failure:
+      the visual reference is the primary anchor, plus-size stays plus-size, one constant
+      weight across all scenes unless there is an explicit result beat, realistic numbers
+      (178->144), never a fitness-model transformation'
+    content_safety: 'TWO lexical registers, one per creative, NEVER blended. NEUTRAL CHRISTIAN
+      is the default: prayer, church, after church, Sunday service, faith, the Lord -- and
+      in this register a service is ''Sunday service'', never ''Mass''. The CATHOLIC layer
+      switches on only when the brief or the reference hints it, and adds rosary, after
+      Mass, my parish, Our Lady, Camino, novena, Lent. Mixing markers from the two camps
+      (''my pastor blessed our rosary walk'') is an instant fail -- it tells the audience
+      the ad was written by an outsider. HARD STOPS, canon rather than taste: never promise
+      divine or miraculous healing; never sell anything ''blessed'', which is simony; never
+      use the Pope, saints or miraculous icons as endorsement; never draw an analogy to
+      Communion; never frame prayer as a metabolic booster (''each Hail Mary burns X calories''
+      is categorically forbidden); never the Way of the Cross as a diet metaphor. The 40-day
+      challenge is deliberately NOT tied to Lent -- we run year-round. Jubilee Year 2025
+      closed in January 2026 and is DEAD as a live hook; retrospective mention only'
+    copy_tone: 'faith is a THIN LAYER, not the subject: two to three touches across the
+      WHOLE creative, spread across hook, the bridge into the mechanic, and the CTA. Everything
+      else stays in ordinary weight-loss register. Under-do rather than over-do -- a fourth
+      and fifth faith line makes it read as a church ad rather than a weight-loss ad. Faith
+      must read as ''this was made for me'', never as the topic'
+    forbidden_lexicon: '''lymphatic'' is GONE from every spoken line -- the voice model
+      mangles it and a science hook fights the faith frame; say puffiness, heaviness, fluid.
+      Food-as-mechanic breaks the niche. Gym-bro lexicon. And the faith red lines below,
+      which are canon rather than taste'
+    forbidden_names: 'no ''Holy Slim'' / ''Blessed Body Walk'' / ''Divine Detox Walk'';
+      never combined with the source''s product (''Apostolic Pilates'', ''Lymphatic Apostolic
+      Walking''); never mixed with another portfolio (''Apostolic Cortisol'', ''Apostolic
+      Daniel Fast''). OWNER DECISION, not to be re-litigated: the product is ''Apostolic
+      Walking'' in every scene, chosen knowingly despite the US Pentecostal association.
+      Do not quietly substitute a softer word. ONE name per creative, rotated between creatives'
+    hook_note: 'one faith identity touch in the hook (''I walked and I prayed''), then ordinary
+      register. Social proof is AGE + POUNDS + a faith layer, and there is a verbatim-ready
+      library to pull from rather than inventing: improvised faith lines are exactly where
+      the tone goes preachy or off-brand'
+    keep_out_of_negatives: walking sneakers, a small cross on a chain, a rosary in the hand,
+      a wayside shrine
+    lipsync_swaps: 'safe aloud -- Camino = kuh-MEE-noh, Santiago = san-tee-AH-goh, rosary
+      = ROH-zuh-ree, pilgrimage = PIL-gruh-mij, Guadalupe = gwah-duh-LOO-pay, novena = noh-VEE-nuh,
+      apostolic = ap-uh-STOL-ik (verify on the first render; if the voice mangles it, fix
+      the pronunciation, do NOT swap the word out). NEVER spoken: lymphatic (removed entirely),
+      Francigena, credencial, Compostela, Ultreia, peregrino, albergue'
+    locations: a country road or gravel lane in the morning, a footpath, a wayside shrine,
+      the OUTSIDE steps of a church, a field in morning light, a quiet residential street
+      at dawn, a kitchen table with a mug and a prayer book. NEVER the interior of a church
+      during a service, never the altar, never a sanctuary staged as a set for the offer
+    mechanic: weight loss through a gentle twenty-to-thirty-minute daily walk, wrapped in
+      a pilgrimage and faith frame. Mechanically identical to Lymphatic Walking; the differentiator
+      is the FRAME, not the movement. The headline result is always the BODY and the WEIGHT
+      -- faith is a layer of meaning and motivation, never the payoff
+    moves: 'walking IS the mechanic. Ankle circles, calf stretches and deep breathing only
+      as short warm-up or cool-down beats that flow INTO the walk. No jumping, no running,
+      no floor exercises, no athletic feats -- it breaks the 50-70 audience''s trust. No
+      equipment as a hero prop: no treadmill, no dumbbells, no mat. Prayer while walking
+      is a legitimate on-screen beat (rosary in hand, Catholic register only); a person
+      standing still in a prayer pose is NOT the mechanic'
+    names:
+    - Apostolic Walking
+    - The 40-Day Apostolic Walk
+    - The Apostolic Walking Reset
+    - The Apostolic Walking Method
+    negative_tokens: gym equipment, dumbbells, treadmill, gym machines, gym-bro aesthetic,
+      high-impact jumping, leggings-and-crop-top gym look, bare torso, clerical vestments,
+      cassock, clerical collar, nun habit, altar, church interior during service, religious
+      icons as endorsement, papal imagery, crucifix close-up as product prop, pilgrim costume
+      cosplay, brand logos, fitness-model glam, before-body shaming
+    objections: 'keep verbatim -- gym criticism (''gym after fifty? no thanks'', ''cardio
+      wrecked my knees''), with the gym kept in BOTH question and answer (answer: gentle
+      movement you actually do every day beats intense movement you quit after two weeks).
+      THE central objection is ''I already walk every day and nothing changes'' -- every
+      viewer thinks she already owns the product, and the answer is pace, regularity and
+      intention: ''it''s not the steps, it''s that you never miss a day''. The FAITH objection,
+      ''isn''t it strange to mix prayer and losing weight?'', is answered calmly in one
+      or two sentences -- the body is a gift, caring for it is a responsibility, prayer
+      is what keeps you from quitting -- and never with a theology lecture. Age is a QUALIFICATION,
+      not an excuse: ''I''m sixty-three'' / ''Oh, perfect''. NEVER turn the walk into doing
+      nothing: ''hasn''t exercised in years'' resolves to ''this is the gentlest place to
+      start'''
+    palette: WARM -- sand, olive, ochre, muted blue, whitewashed stone, cream linen. Light
+      is golden-hour or dawn, soft and diffused. No neon
+    power_words: 'REQUIRED time lexicon, an inversion versus the diet templates where it
+      is banned: ''thirty minutes a day'', ''every morning'', ''before breakfast'', ''after
+      Sunday service''. It IS the offer. Symptom language converts and stays: swollen ankles,
+      heavy legs, puffy mornings, tight rings, shoes that don''t fit by afternoon. Faith
+      touches: ''I walked and I prayed'', ''I offered up every step'', ''forty days, forty
+      walks'''
+    prop_language: walking sneakers, a small cross at the neck, a rosary in the hand (Catholic
+      register), a wayside shrine, a plain wooden staff if restrained and incidental, a
+      modest step counter, a mug and a prayer book at the kitchen table
+    wardrobe: 'modest, quiet, ordinary -- four styles: modest domestic (cardigan over a
+      blouse, small cross on a chain); walking outdoors (light jacket, comfortable trousers,
+      WALKING SNEAKERS, a modest step counter); Sunday-plain for the after-church beats;
+      home testimonial in soft cream or sage knit. Walking sneakers are the NORM here, an
+      inversion versus the diet templates. Forbidden: the gym look, crop tops, bare torso,
+      compression base layers -- and ANY church garment: cassock, clerical collar, nun''s
+      habit, vestments. Also forbidden: pilgrim cosplay (wide-brimmed hat, scallop shell
+      as costume)'
+  back_pain:
+    anchors:
+    - It's not more stretching -- it's the right ones, in the right order, every day.
+    - Strong isn't the same as stable.
+    - It's often not where you feel it.
+    - You don't need to get fitter -- you need to stop the thing that keeps re-injuring
+      you.
+    - It's not in your head, and it's not just age.
+    - Without drugs or surgery.
+    - I stopped waiting for someone to fix me.
+    - Five minutes, before you even get out of bed.
+    cast_lock: 'the gender split is EVEN -- a male speaker is exactly as normal as a female
+      one, unlike the lymph verticals. Never feminise or masculinise it. Default 40-55 with
+      a deliberately wide spread, from office millennials who sit all day through to 65+.
+      Western, real people. The transformation arc is POSTURE AND MOBILITY, never fat: before
+      is hunched, a hand on the lower back, easing down into a chair; after is standing
+      straight, bending freely, picking up a grandchild. Never a bathroom scale in frame.
+      Preserve exact ages and the YEARS OF PAIN verbatim -- ''six years'', ''twelve years''
+      are this niche''s equivalent of the weight number'
+    content_safety: 'THE EXPERT IS NEVER INVENTED. No authority figure in the reference
+      -- a street interview, two friends, pure UGC -- means NO expert at all and no competence
+      markers added. Where one exists, give at most one or two modest markers that fit the
+      scene (a spine model or poster on a podcast set, a rolled mat, a polo shirt, demonstrating
+      on their own body) and at most ONE line such as ''I''ve worked with backs for twenty
+      years''. FORBIDDEN always, even in an office: a white coat, a stethoscope, scrubs,
+      a diploma wall, a clinic, and the word ''doctor'' for our expert -- we sell exercises,
+      a physician is not needed here'
+    copy_tone: 'the viewer came to STOP THE PAIN, not to improve her body. Never a drill
+      sergeant, never gym-bro, never a pseudo-medical guru. No safety gating of any kind:
+      no invented age limits, contraindication lists, red-flag warnings or ''who this is
+      not for'' blocks -- it is an ad, and the funnel takes it from there'
+    forbidden_lexicon: 'WEIGHT, in any form -- this template overrides the portfolio rule
+      that the headline result is the body. No scale, no dress size, no belly fat, no before/after
+      body; a weight result in the source is rewritten into FUNCTION (''I dropped two sizes''
+      -> ''I can bend over without that stab''). Also forbidden: gym-bro (burn, shred, no
+      pain no gain, six-pack, HIIT); food-as-mechanic; and cure/outcome claims (cure, heal
+      your herniated disc, reverse degenerative disc disease, pain gone forever, replace
+      surgery) which Meta and the FTC pull. A PERSONAL story is not a product promise: ''I
+      cancelled my surgery'' and ''I got off the pills'' are allowed without restriction
+      and are the strongest proof here'
+    forbidden_names: no 'Spine Blaster' / 'Back Fix Extreme' / 'Miracle Back Cure'; never
+      combined with the source's product ('Pilates Back Relief', '9-minute Back Pain Relief');
+      never mixed with another portfolio ('Mediterranean Back Relief'). ONE name in every
+      scene of one creative, rotated between creatives
+    hook_note: 'FIRST PERSON, always -- the speaker''s own pain story, preserved as STRUCTURE.
+      The hook may NOT ask about the viewer''s health: ''Do you suffer from sciatica?''
+      is auto-flagged by Meta as a personal attribute, while ''I had back pain for twelve
+      years'' passes clean. Social proof is AGE + YEARS OF PAIN + WHAT SHE CAN DO NOW'
+    keep_out_of_negatives: mat, chair, towel, foam roller, wall, doorway
+    lipsync_swaps: 'the voice model mangles clinical terms -- never SPEAK lumbar (say ''lower
+      back''), herniated disc (''a disc issue''), piriformis (''the muscle deep in your
+      glute''), sacroiliac (''S-I joint''), stenosis (''narrowing in the spine''), iliopsoas
+      (''hip flexor''), vertebrae (''the bones in your back''), coccyx (''tailbone''); do
+      not voice spondylolisthesis at all. All of them are fine as ON-SCREEN TEXT. ''sciatica''
+      IS approved aloud and is the best-selling word of the vertical: sy-AT-ih-kuh; ''sciatic
+      nerve'' = sy-AT-ik NERVE; ''S-I joint'' = ess-EYE joint'
+    locations: a living room with a mat, a bedroom in morning light, the edge of the bed,
+      a kitchen with the counter as a support, a hallway or doorway, the back yard, an office
+      desk for the sitting-all-day character. Never a mirrored gym hall, a weight room,
+      a CrossFit box or a clinical exam room
+    mechanic: a home programme of gentle exercises that unload and strengthen the back --
+      five to fifteen minutes a day, on a mat, on a chair or against a wall
+    moves: 'decompression (prone press-up, child''s pose, doorway decompression, 90/90 breathing),
+      mobility (cat-cow, knee-to-chest, seated rotation, hip flexor stretch, thoracic rotation),
+      core and glute (glute bridge, dead bug, bird dog, side plank, modified curl-up --
+      the McGill Big 3, the recognisable ''science'' block of the niche), nerve glides (sciatic
+      flossing), posture (wall angels, chin tuck, pelvic tilt). Chair and wall variants
+      are attractive and normal, framed as CONVENIENCE (''you can do it holding the kitchen
+      counter'') and never as an age limit. No high-impact jumping, no running, no loaded
+      lifting, no advanced yoga pretzels -- they break belief for someone whose back hurts
+      right now. The exercise STAYS: only the modality changes, and it never becomes doing
+      nothing'
+    names:
+    - Back Pain Relief
+    - 28-Day Back Relief Challenge
+    - The Back Relief Reset
+    - The Back Relief Method
+    negative_tokens: dumbbells, barbells, gym machines, CrossFit gear, treadmill, mirrored
+      gym, bare torso, bathroom scale, before/after body shaming, white lab coat, stethoscope,
+      clinical exam room, diploma wall, brand logos, fitness-model glam, high-impact jumping,
+      golden Mediterranean haze
+    objections: 'keep verbatim -- gym and hard-cardio criticism, with the compared thing
+      kept in BOTH question and answer (answer: ''strong isn''t the same as stable -- the
+      gym loads the exact thing that already hurts''). THE CENTRAL OBJECTION of the niche
+      is ''I''ve already tried stretching / physio gave me a sheet'', and the answer is
+      never more stretching: it is the order, the daily rhythm, and what keeps loading the
+      back in between. Also: the doctor who only gave painkillers; ''my scan showed a disc
+      issue, how can stretching fix that?'' -> ''it''s often not where you feel it''; fear
+      of making it worse; cortisone that wore off; the surgeon proposing a fusion; the chiropractor
+      at eighty dollars a visit; YouTube stretches that made it worse; ''it''s just old
+      age''; and ''no time or energy'', which the time lexicon answers. NEVER turn this
+      into doing nothing -- ''hasn''t worked out in years'' resolves to ''this is the gentlest
+      place to start'', never to ''she doesn''t need to''. Tone toward doctors is not anti-medical:
+      it is taking it into your own hands'
+    palette: WARM AND DOMESTIC -- milky white, warm grey, light wood, soft morning light,
+      muted accents. No neon, no clinical cold white, no golden Mediterranean haze
+    power_words: 'lower back pain, sciatica, shooting pain down my leg, pins and needles,
+      pinched nerve, a disc issue, slipped disc, S-I joint, flare-up, my back went out,
+      stiff when I get out of bed, couldn''t tie my shoes, can''t put my socks on, sitting
+      all day, spasms, locked up, it never fully goes away, on and off for years. Use 25-35
+      of these verbatim across a creative -- this is what makes the viewer say ''that''s
+      me''. REQUIRED time lexicon, an inversion versus the diet templates where it is forbidden:
+      ''just five minutes a day'', ''before you even get out of bed'', ''no gym, no equipment'''
+    prop_language: a mat in the living room, an ordinary armless chair, a wall, a doorway,
+      a towel under the head or knees, a pillow, the kitchen counter, the edge of the bed,
+      a rug, socks, a morning coffee mug, a foam roller -- hero props
+    wardrobe: 'four styles -- morning-at-home (T-shirt, loose soft trousers or pyjama bottoms,
+      socks: the signature look of the ''before you get out of bed'' beat); casual outdoor;
+      office-casual for the millennial character; comfortable athleisure that is NOT a gym
+      look. Forbidden: gym and CrossFit kit, compression performance wear, crop tops, bare
+      torso'
+  biblical_diet:
+    anchors: []
+    cast_lock: Christian women 50+, American or Western European. No East Asian features
+      on the main customer -- a carry-over from Asian Pilates sources
+    content_safety: 'the faith red lines of the apostolic vertical apply in spirit: no divine
+      or miraculous healing promise, nothing sold as blessed, no clergy as the face of the
+      offer, no scripture used as a metabolic claim'
+    copy_tone: warm and reverent without preaching; faith is the frame, food is the mechanic,
+      and weight is the result
+    forbidden_lexicon: 'ZERO TIME-BASED LEXICON. Any phrase expressing the product as a
+      time activity -- ''X minutes a day'', ''a X-minute routine'', ''just N minutes'' --
+      is categorically forbidden, even freshly written and even phrased differently from
+      the reference. A diet is WHAT you eat, not how long you spend, and a minute-based
+      claim sounds identical to the exercise niches. Replace with FREQUENCY: ''daily'',
+      ''with every meal'', ''every morning'', ''three simple meals a day''. Single exception:
+      an explicit MEAL-PREP time (''a 20-minute pasta dinner'') is about cooking, not the
+      programme -- and is still better rephrased. This is the exact INVERSE of the activity
+      verticals, where the time lexicon is required and central'
+    forbidden_names: never combined with the source's product name; ONE name per creative,
+      rotated between
+    hook_note: mirror the reference's hook structure
+    keep_out_of_negatives: olives, figs, bread, honey, fish
+    locations: ordinary Western domestic settings with a warm Holy-Land food palette. Never
+      church-altar staging
+    mechanic: 'eating the way scripture describes -- olives, figs, bread, grapes, honey,
+      fish -- re-framed around faith. The foods overlap heavily with Mediterranean and that
+      is expected: the differentiator is the FAITH FRAME, not the food. Unlike Cortisol,
+      this niche is NOT anti-Mediterranean'
+    moves: 'none: this is a food vertical'
+    names:
+    - Biblical Diet
+    - Biblical Eating
+    - the Biblical way of eating
+    - 30-day Biblical Challenge
+    - Biblical Reset
+    negative_tokens: gym equipment, yoga mats, pilates props, exercise gear, dumbbells,
+      workout machines, athletic studio aesthetic, East Asian features on the main customer,
+      Middle-Eastern costume, ancient-Israel cosplay, large dominant crosses, church-altar
+      staging, clergy robes, overly muscular fitness instructor body type, brand logos
+    objections: mirror the reference's beats; the faith objection is answered calmly and
+      briefly, never with a theology lecture
+    palette: warm Holy-Land food tones
+    power_words: biblical foods, the way they ate, olives, figs, honey, bread, fish, real
+      food from scripture
+    prop_language: olives, figs, grapes, honey, bread, fish, a plain table
+    wardrobe: ordinary modern clothing. NO Middle-Eastern costume or ancient-Israel cosplay,
+      no clergy robes
+  bp_walking:
+    anchors:
+    - Twenty minutes, most days. That's the whole thing.
+    - Easy enough to hold a conversation.
+    - You don't need a gym, a plan or new shoes.
+    - It's the walk you'll actually keep doing.
+    - Alongside whatever your doctor already has you on.
+    - Start at the end of the street.
+    cast_lock: mixed, and skewing older than most verticals — real adults 50-70, both men
+      and women, ordinary builds. Couples and neighbours walking together read well here.
+      Never fitness models, never anyone depicted as frail, ill or mid-diagnosis
+    content_safety: 'OUTRANKS EVERYTHING, INCLUDING THE PRODUCER''S NOTE, AND THIS IS THE
+      STRICTEST BLOCK IN THIS FILE. Hypertension is a diagnosed, medicated condition. (1)
+      NEVER claim or imply that walking lowers blood pressure, treats, reverses, manages
+      or cures hypertension. The only permitted framing is general wellbeing and heart-healthy
+      movement: "supports an active lifestyle", "movement your doctor already recommends",
+      "alongside your care". (2) NEVER suggest, imply or depict reducing, skipping or stopping
+      medication, and never frame the programme as an alternative to it. If an objection
+      touches medication, the answer is "alongside it — talk to your doctor". (3) NO NUMBERS.
+      No BP readings on screen or in speech, no before/after readings, no "down from 150
+      to 130". A number turns wellbeing copy into a clinical claim in one frame. (4) NO
+      FEAR. No stroke, heart attack, "silent killer" or mortality framing; this audience
+      is frightened enough and fear-selling a medical condition is not something we do.
+      (5) No clinical imagery (cuffs, monitors, pills, clinicians) — see negative_tokens
+      — and a "talk to your doctor before starting" line in the bottom safe zone on EVERY
+      creative, not just the ones that mention health.'
+    copy_tone: calm, plain, unhurried and reassuring — the tone of sensible advice from
+      someone who is not selling you a miracle. Never urgent, never alarming, never triumphant.
+      The lowest-friction offer we have; say so plainly
+    forbidden_lexicon: 'food-as-mechanic; gym-bro (reps, burn, HIIT, shred); and ABSOLUTELY
+      any of: lower your blood pressure, drop your numbers, reverse hypertension, get off
+      your meds, reduce your medication, cure, treat, fix, natural alternative to pills.
+      Also avoid fear words — stroke, heart attack, silent killer, ticking time bomb'
+    forbidden_names: no 'BP Blaster', 'Pressure Drop', 'Beat Hypertension' or any name that
+      promises a clinical outcome; nothing with a NUMBER in it ('120/80 Method'); never
+      combined with the source's product; no 'Extreme'/'Blast'/'Shred'
+    hook_note: HABIT-FIRST — open on the walk being easy and keepable ('twenty minutes,
+      most days'), or on the everyday feeling of being told to move more. NEVER open on
+      a number, a diagnosis, a symptom or a scare
+    keep_out_of_negatives: walking shoes, front door, park path, bench, plain watch
+    lipsync_swaps: say 'your numbers' rather than 'blood pressure' inside a spoken line
+      where the sentence allows, 'a steady walk' not 'aerobic exercise', 'your doctor' not
+      'physician'. Keep 'Blood Pressure' visual-only where it can be — the spoken register
+      should sound like a neighbour, not a leaflet
+    locations: a neighbourhood pavement, a park loop, a quiet lane in early morning or evening
+      light, a seafront path, a shopping-centre concourse in bad weather. Ordinary places
+      within walking distance of a front door
+    mechanic: steady rhythmic walking at an easy conversational pace — one walk a day, about
+      twenty minutes, most days of the week
+    moves: a steady conversational-pace walk as the hero, with a slow first minute and an
+      easy last minute as the warm-up and cool-down. NEVER running, intervals, hills as
+      a challenge, or anything that would leave the walker breathless
+    names:
+    - Blood Pressure Walking
+    - The Daily Walk Method
+    - 28-Day Walking Challenge
+    - The 20-Minute Walk Habit
+    - Walking for a Healthier Heart
+    negative_tokens: blood-pressure cuff, sphygmomanometer, monitor readout, any numeric
+      BP reading, pill bottles, pill organisers, medication, doctors, nurses, stethoscopes,
+      clinics, hospitals, charts or graphs of readings, anatomical heart diagrams, red alarm
+      colouring, distressed or clutching-chest imagery, dumbbells, gym machines, food as
+      hero prop, brand logos, fitness-model glam, running, before-body shaming
+    objections: 'keep verbatim — the gym and hard-exercise criticism (''I''m not running
+      at my age'', ''the gym is not for me''). Vertical-specific: ''I already walk and nothing
+      changes'' (answer on pace, duration and consistency, never on doing more), ''my doctor
+      already told me to exercise'' (answer: this is how you keep doing it), ''I''m on medication''
+      (answer: this sits alongside it — talk to your doctor, never instead of), ''I get
+      out of breath'', ''my knees''. NEVER script an objection whose answer is to change
+      or stop medication'
+    palette: calm daylight — soft green, sky grey-blue, warm stone, muted navy. Ordinary
+      weather and ordinary streets. Avoid clinical white-and-blue, avoid red (it reads as
+      alarm here), avoid golden-hour glamour
+    power_words: steady, easy pace, conversational, twenty minutes, most days, a habit you
+      keep, heart-healthy movement, supports, day by day, doctor-friendly
+    prop_language: comfortable everyday shoes, a front door, a park path, a lamppost or
+      bench as a turnaround marker, a plain watch. NEVER a blood-pressure cuff, a monitor,
+      a pill organiser or a chart of readings
+    wardrobe: 'everyday clothes and comfortable shoes — a jacket, trousers or joggers, whatever
+      he or she already owns. Forbidden: gym-bro and CrossFit gear, running kit, heart-rate
+      straps, medical wearables, hospital settings'
+  cortisol_diet:
+    anchors: []
+    cast_lock: American or Western European typage, NOT Italian -- Italian typage carries
+      over from Mediterranean sources and must be corrected. No East Asian features on the
+      expert. Vary the expert look across creatives
+    content_safety: 'cortisol is a real hormone and this is a food product: no medical claims,
+      no treating or curing, no clinical imagery'
+    copy_tone: calm and warm, never a drill sergeant, never clinical
+    forbidden_lexicon: 'ZERO TIME-BASED LEXICON. Any phrase expressing the product as a
+      time activity -- ''X minutes a day'', ''a X-minute routine'', ''just N minutes'' --
+      is categorically forbidden, even freshly written and even phrased differently from
+      the reference. A diet is WHAT you eat, not how long you spend, and a minute-based
+      claim sounds identical to the exercise niches. Replace with FREQUENCY: ''daily'',
+      ''with every meal'', ''every morning'', ''three simple meals a day''. Single exception:
+      an explicit MEAL-PREP time (''a 20-minute pasta dinner'') is about cooking, not the
+      programme -- and is still better rephrased. This is the exact INVERSE of the activity
+      verticals, where the time lexicon is required and central'
+    forbidden_names: '''Cortisol Detox'' is the marketing brand name and is NEVER used inside
+      the creative -- not in dialogue, not in burnt-in subtitles, not in any on-screen text.
+      The voice models systematically mangle it (''Cortisol Diox'', ''Cortizal Dax'', ''Cordi-sol
+      Tex''), which breaks lipsync and wastes the take. Banners outside the video pipeline
+      may still use it'
+    hook_note: mirror the reference's hook structure
+    keep_out_of_negatives: ordinary kitchen props
+    lipsync_swaps: never speak 'Cortisol Detox' -- say Cortisol Diet, Cortisol Reset or
+      Cortisol Challenge by context
+    locations: calm, modern, American or Western European. NOT a Mediterranean villa, olive
+      grove or village -- that is the neighbouring product and mixing them costs both
+    mechanic: eating to bring cortisol down -- calm, modern, and deliberately NOT Mediterranean-coded,
+      which is the neighbouring product
+    moves: 'none: this is a food vertical'
+    names:
+    - Cortisol Diet
+    - Cortisol Reset
+    - Cortisol Challenge
+    negative_tokens: gym equipment, yoga mats, pilates props, exercise gear, dumbbells,
+      workout machines, athletic studio aesthetic, East Asian features on the Cortisol expert
+      character, Italian villa, olive grove, Mediterranean village setting, terracotta-dominant
+      palette, overly muscular fitness instructor body type, brand logos
+    objections: the comparison target is the gym and hard cardio, whose answer is that intensity
+      RAISES the thing we are trying to lower -- keep the compared thing in both question
+      and answer
+    palette: calm modern American or European. NOT terracotta-dominant, NOT Mediterranean
+    power_words: calm, cortisol, stress belly, wired and tired, the body holds on to it,
+      bring it down
+    prop_language: ordinary modern kitchen and living-room props
+    wardrobe: from the reference; no rigid four-style framework here
+  intermittent_fasting:
+    anchors:
+    - it's not a diet, it's when you eat
+    cast_lock: mirror the reference
+    content_safety: 'fasting has real contraindications: no medical claims, no clinical
+      imagery, and never present it as treatment'
+    copy_tone: matter-of-fact and permissive -- the offer is that nothing is banned
+    forbidden_lexicon: 'ZERO TIME-BASED LEXICON. Any phrase expressing the product as a
+      time activity -- ''X minutes a day'', ''a X-minute routine'', ''just N minutes'' --
+      is categorically forbidden, even freshly written and even phrased differently from
+      the reference. A diet is WHAT you eat, not how long you spend, and a minute-based
+      claim sounds identical to the exercise niches. Replace with FREQUENCY: ''daily'',
+      ''with every meal'', ''every morning'', ''three simple meals a day''. Single exception:
+      an explicit MEAL-PREP time (''a 20-minute pasta dinner'') is about cooking, not the
+      programme -- and is still better rephrased. This is the exact INVERSE of the activity
+      verticals, where the time lexicon is required and central. NOTE the distinction: fasting
+      HOURS and the eating WINDOW are the mechanic and are required; ''X minutes a day''
+      framing is not'
+    forbidden_names: '''Intermittent Fasting'' is the external brand name and is NEVER SPOKEN
+      in content -- the word ''Intermittent'' is long and the voice models mangle it. Use
+      the Fasting Plan / 16:8 Plan / Fasting Challenge / Fasting Reset in dialogue and subtitles.
+      ONE name locked per creative'
+    hook_note: mirror the reference's hook structure
+    keep_out_of_negatives: a clock, a watch, a plain meal
+    lipsync_swaps: never speak 'Intermittent'. '16:8' is spoken 'sixteen-eight' and is clean
+      and safe
+    locations: ordinary domestic settings; a kitchen and a table are the natural ground
+    mechanic: WHEN you eat rather than what -- a 16:8 eating window. An exercise mechanic
+      in the source converts to the fasting mechanic; everything that already converts stays
+    moves: 'none: the mechanic is timing, not movement'
+    names:
+    - the Fasting Plan
+    - the 16:8 Challenge
+    - the Fasting Challenge
+    - the Fasting Reset
+    - the Fasting Method
+    negative_tokens: food at the wrong time, gym equipment as the main prop, before/after
+      split-screen, measuring, weighing, scales, medical or clinical imagery, brand logos,
+      app UI, distorted hands holding food, calorie tables
+    objections: mirror the reference's beats, with the comparison target moving from the
+      gym to counting and restricting
+    palette: from the reference; nothing is imposed
+    power_words: 16:8 (spoken 'sixteen-eight'), fasting hours, break the fast, the eating
+      window, it's not a diet, it's when you eat
+    prop_language: a clock or a watch as the honest hero prop, a plain meal, a kitchen table
+    wardrobe: from the reference
+  lipedema_pilates:
+    anchors:
+    - No jumping, no pounding.
+    - Just a mat.
+    - Just a wall.
+    - Gentle on sore, heavy legs.
+    - You don't need to be flexible.
+    - Fifteen minutes, at home.
+    - Low-impact, every single move.
+    cast_lock: the audience is ~95% female, 35-65. Real bodies with fuller legs and hips
+      shown with the same editorial dignity as any other vertical — the shape is the reason
+      she is here, so it is never hidden, and never made the punchline. The house aesthetic
+      is editorial; faces may be partially obscured
+    content_safety: 'Outranks everything including the producer''s note. This vertical speaks
+      to an audience with a real diagnosis, so it is ALWAYS complementary and NEVER a treatment:
+      "supports", "helps you feel lighter", "gentle movement alongside your care" — never
+      "cures", "treats", "reverses", "removes" or "gets rid of". Never claim the exercise
+      reduces lipedema tissue or fat, and never show a before/after that slims the legs
+      — that is both a false claim and the thing this audience is most hurt by. No shame,
+      no fear-mongering, no "you did this to yourself". A "talk to your doctor" answer to
+      any medical objection, and the disclaimer in the bottom safe zone on every creative.
+      This constrains HOW the subject is expressed and cannot be overridden by a creative
+      note.'
+    copy_tone: warm, calm, practical and dignified — a little softer than Pilates' editorial
+      register. Never clinical, never pitying, never triumphant
+    forbidden_lexicon: '''skinny'', ''slim your legs down'', ''melt'', ''burn off'', ''fat
+      disorder'', ''cure'', ''treat'', ''reverse''. No gym-bro (reps to failure, shred,
+      beast mode, HIIT). Do not call the legs ''bad'', ''ugly'' or ''deformed'' — the copy
+      never shames the body it is speaking to'
+    forbidden_names: no 'Lipedema Cure', 'Fat Disorder Fix', 'Leg Fat Burn' or any name
+      implying treatment or removal; never 'Lymphatic Lipedema Pilates' (that is a different
+      vertical); no 'Extreme'/'Shred'/'Burn' constructions
+    keep_out_of_negatives: mat, wall, grip-socks, fuller legs, cushion
+    lipsync_swaps: the voice model mangles the signature terms — say 'lip-uh-DEE-muh' for
+      lipedema, 'the machine' not reformer, 'small pulses' not the hundred, 'roll up slowly'
+      not roll-up, 'core' not powerhouse. Keep the clinical spelling visual-only
+    locations: home living room with a mat, at the wall, an elegant home studio, by a bright
+      window, a calm neutral room — the same editorial world as Pilates
+    mechanic: controlled low-impact Pilates aimed at the legs and hips — mat or wall, gentle
+      and unloaded, about fifteen minutes a day
+    moves: bridge, leg circles, side-lying leg lifts, ankle pumps, gentle wall series, standing
+      roll-down, cat-cow, seated calf work. NEVER jumping, NEVER deep loaded squats, NEVER
+      teaser or advanced reformer tricks as the hero
+    names:
+    - Lipedema Pilates
+    - The Heavy Legs Reset
+    - Gentle Legs Pilates
+    - 28-Day Lipedema Pilates Challenge
+    - Light Legs Method
+    negative_tokens: dumbbells, barbells, treadmill, gym machines, jumping, before-body
+      shaming, medical imagery (clinics, compression sleeves, callipers, measuring tapes,
+      diagrams of tissue), brand logos, fitness-model glam, cold clinical palette, distressed
+      or crying subject
+    objections: 'keep verbatim — ''cardio makes my legs ache more'', ''nothing I do changes
+      my legs'', ''diets never touched them''. Vertical-specific: ''is it safe with lipedema?''
+      (answer: gentle, unloaded, and talk to your doctor), ''will exercise even help?'',
+      ''I can''t do high impact'', ''my legs bruise easily'''
+    palette: 'warm cream #F5EFE6, sage #9CAF88, dusty rose, terracotta #C97B5C, warm black
+      #2A2520. Editorial and calm; avoid clinical white-and-blue, neon, gym black/red, and
+      any ''medical'' colour signature'
+    power_words: gentle, unloaded, low-impact, lighter, ease, mobility, circulation, long
+      lean lines, control, kind to sore legs, day by day
+    prop_language: mat, wall, grip-socks, cushion under the knees, studio light
+    wardrobe: 'a Pilates set with grip-socks, leggings or cropped leggings that show the
+      legs working without scrutinising them. Forbidden: gym-bro tanks, ''shred'' aesthetic,
+      compression garments styled as medical wear, anything clinical'
+  lymph_exercise:
+    anchors:
+    - The swelling goes first.
+    - My rings finally fit again.
+    - My ankles by 3pm — gone.
+    - Just a 10-minute walk before breakfast.
+    - You can't massage it away — you have to move it.
+    - Keep it private until they ask what changed.
+    cast_lock: 'a strong female skew — swelling, water retention, rings and sandals are
+      female-coded pains. Real Western women 45-65. In a before/after the arc is about PUFFINESS,
+      not dramatic fat: before is swollen ankles, puffy face, heavy legs, rings that don''t
+      fit; after is de-puffed, defined ankle bones, natural contour, rings fitting'
+    content_safety: 'This vertical attracts an audience with real diagnoses (lymphedema,
+      lipedema). Always complementary, never a cure: "supports", "helps drain", "feel lighter"
+      — never "cures", "treats" or "heals". Do not slim swelling into fat in a before/after.
+      Strong disclaimer in the safe zone, and a "talk to your doctor" answer to any medical
+      objection.'
+    copy_tone: warm, calm, understanding, slightly confessional — privacy-framed ('keep
+      it private until they ask'). Validates the symptom ('the swelling isn't your fault').
+      Never a drill sergeant, never gym-bro, never a pseudo-medical guru
+    forbidden_lexicon: food-as-mechanic; gym-bro (reps, burn, shred, HIIT, no pain no gain)
+      — this is gentle and low-impact; and any medical claim to cure, treat or heal lymphedema.
+      Only support, help drain, feel lighter
+    forbidden_names: no 'Lymph Blast' / 'Detox Drain Extreme'; never combined with the source's
+      product ('Yoga Lymphatic', 'Pilates Lymphatic'); never mix sub-verticals in one creative
+    hook_note: SYMPTOM-FIRST. The hook almost always opens on a symptom — swollen ankles,
+      morning puffiness, 'legs like concrete by 3pm', rings that don't fit — not on the
+      product. Preserve that structure
+    keep_out_of_negatives: walking shoes, rebounder, gua sha, eucalyptus
+    lipsync_swaps: the voice model mangles 'lymphatic', 'lymph', 'gua sha', 'rebounder'
+      and 'edema' — in spoken lines say 'lymph flow', 'drainage walk', 'morning flush',
+      'the bounce'. Keep 'Lymphatic' as the visual brand name
+    locations: a morning path or park in light mist — the signature shot — a living room,
+      a bedroom by the window, a mini-trampoline at home
+    mechanic: gentle lymphatic-drainage movement — ten minutes before breakfast, every morning
+    moves: rhythmic walking, ankle circles, calf pumps, legs-up-the-wall, gentle bounce,
+      arm sweeps, deep breathing. NEVER high-impact work or hard jumps — it breaks both
+      the niche and medical safety
+    names:
+    - Lymphatic Morning Exercise
+    - Lymphatic Flow
+    - 28-Day Lymphatic Challenge
+    - Lymphatic Reset
+    - The Lymphatic Method
+    - The Swelling Goes First
+    negative_tokens: dumbbells, barbells, treadmill, gym machines, food as hero prop, brand
+      logos, fitness-model glam, before-body shaming, gym-bro aesthetic, high-impact jumping,
+      yellow or golden haze, warm amber tones
+    objections: 'keep verbatim — gym and running criticism (''running made the swelling
+      worse''), with the compared thing kept in BOTH question and answer (answer: high-impact
+      worsens swelling, gentle rhythmic movement drains it). Vertical-specific and important:
+      the FAILED-REMEDY objection (''dry brushing didn''t work'', ''the massage gun did
+      nothing'', ''creams and compression socks — waste of money''), answered with ''those
+      are passive; you have to MOVE it''; ''I already walk and nothing changes'' (regular
+      walking is not lymphatic walking — rhythm, technique, timing); and the medical objection
+      (''I have lymphedema or lipedema — is this safe?''), answered as complementary'
+    palette: 'COOL — deep charcoal #1A1A1A, sage #8FA886, cool grey; accents muted teal
+      #6A9A8A, dusty mauve #9A7A85, cool blue-grey; light backgrounds in sage, lavender,
+      blush or powder blue. Avoid yellow and golden haze and warm amber'
+    power_words: drain, de-bloat, flush, the swelling goes first, lighter legs, rings fit
+      again, morning puffiness, water weight, de-puff, heavy legs — this is the vertical's
+      signature result language, not decoration
+    prop_language: walking shoes, a rebounder (mini-trampoline), gua sha, dry brush, eucalyptus,
+      Epsom salts — lymph-coded props, often the hero
+    wardrobe: 'leggings, a set, sneakers — the norm and needed. Forbidden: gym-bro and CrossFit
+      gear. Compression socks are ambivalent: fine as a failed remedy inside an objection,
+      never as a daily product to buy'
+  lymph_massage:
+    anchors:
+    - Morning puffiness — gone by the time you leave.
+    - Two minutes at the sink.
+    - You can feel it drain.
+    - It's the movement, not the tool.
+    - Keep it private until they ask what changed.
+    cast_lock: women 35-60, real skin and real texture. No retouched beauty-campaign gloss,
+      no clinical or patient framing
+    content_safety: Complementary, never a cure — never "cures", "treats" or "heals" lymphedema
+      or lipedema, and no anti-aging cure claims. The technique, not a tool, is what we
+      sell. Disclaimer in the safe zone; answer any medical objection with "talk to your
+      doctor".
+    copy_tone: soothing, self-care, quietly confident — a friend showing you something at
+      the mirror, never a clinician and never a beauty-brand voice
+    forbidden_lexicon: food-as-mechanic; gym-bro; any claim to cure, treat or heal lymphedema;
+      and anti-aging cure language ('erases wrinkles', 'reverses aging')
+    forbidden_names: no 'Detox Drain Extreme'; never combined with the source's product;
+      never named after a device or a brand of tool
+    hook_note: SYMPTOM-FIRST — open on the puffy morning face, not on the technique
+    keep_out_of_negatives: hands, gua sha, jade roller, towel, bathroom counter, eucalyptus
+    lipsync_swaps: say 'lymph flow', 'morning flush', 'drainage strokes' rather than 'lymphatic',
+      'lymph' or 'edema' in spoken lines; 'the stone' rather than 'gua sha'. Keep 'Lymphatic'
+      visual-only
+    locations: a calm bathroom at the mirror, a bedroom vanity in morning light, a sofa
+      corner in the evening. Private, warm, everyday — never a clinic or spa set
+    mechanic: guided self-massage drainage strokes the viewer performs with her own hands
+      — a few minutes at the sink, morning and evening
+    moves: gentle downward neck strokes, jawline sweeps, under-eye taps, collarbone pumps,
+      deep breathing to open the flow. Hands are the hero; a gua sha or roller may appear
+      only as an optional aid, never as the reason it works. NEVER hard scraping, dragging
+      or anything that reddens skin
+    names:
+    - Lymphatic Massage
+    - Face & Neck De-Puff
+    - 28-Day Lymphatic Massage Challenge
+    - Lymphatic Reset
+    - The Lymphatic Method
+    negative_tokens: food as hero prop, brand logos, clinical or medical setting, spa-brand
+      styling, retouched beauty-campaign gloss, before-body shaming, device-as-hero, yellow
+      or golden haze, warm amber tones
+    objections: keep verbatim — the failed-remedy objection is central here and must NOT
+      be resolved by selling a tool ('the gua sha did nothing' → 'because the tool isn't
+      the mechanic; the strokes and the direction are'). Also 'I don't have time' (two minutes),
+      'does this actually do anything?', and the medical objection, answered as complementary
+    palette: spa neutrals kept COOL — oat, cool grey, sage, soft white, muted teal accents.
+      Avoid yellow and golden haze and warm amber
+    power_words: de-puff, drain, flush, morning puffiness, softer jawline, lighter face,
+      contour comes back, water weight
+    prop_language: hands, a gua sha or jade roller as an optional aid, a folded towel, a
+      plain bathroom counter, eucalyptus
+    wardrobe: 'a robe, a soft towel, a plain top — modest and domestic. Forbidden: spa-brand
+      styling, clinical gowns, anything suggestive'
+  lymph_walking:
+    anchors:
+    - The swelling goes first.
+    - My rings finally fit again.
+    - Just a 10-minute walk before breakfast.
+    - Regular walking isn't lymphatic walking.
+    - You can't massage it away — you have to move it.
+    - Keep it private until they ask what changed.
+    cast_lock: strong female skew, real Western women 45-65. A before/after tracks PUFFINESS,
+      not fat — swollen ankles and tight rings before, defined ankles and rings fitting
+      after
+    content_safety: Complementary, never a cure — "supports", "helps drain", "feel lighter",
+      never "cures" or "treats" lymphedema or lipedema. Do not slim swelling into fat in
+      a before/after. Disclaimer in the safe zone; answer any medical objection with "talk
+      to your doctor".
+    copy_tone: accessible and everyday, warm and understanding, privacy-framed. The lowest-friction
+      offer we have — say so plainly
+    forbidden_lexicon: food-as-mechanic; gym-bro (reps, burn, shred, HIIT); any claim to
+      cure, treat or heal lymphedema
+    forbidden_names: no 'Lymph Blast' / 'Detox Drain Extreme'; never combined with the source's
+      product; never mix sub-verticals in one creative
+    hook_note: SYMPTOM-FIRST — open on the symptom (heavy legs, swollen ankles by the afternoon),
+      not on the walk
+    keep_out_of_negatives: walking shoes, morning path, mist, plain watch
+    lipsync_swaps: say 'lymph flow', 'drainage walk', 'morning flush' rather than 'lymphatic',
+      'lymph' or 'edema' in spoken lines; keep 'Lymphatic' visual-only
+    locations: a misty morning path or park — the signature shot — a neighbourhood pavement,
+      a garden loop, a treadmill only if the reference had one
+    mechanic: gentle rhythmic walking for drainage — one walk a day, ten minutes before
+      breakfast
+    moves: a steady rhythmic walk as the hero, with ankle circles, calf pumps and arm sweeps
+      as the warm-up or cool-down. NEVER running, high-impact intervals or hard jumps
+    names:
+    - Lymphatic Walking
+    - 28-Day Lymphatic Walking Challenge
+    - Lymphatic Reset
+    - The Lymphatic Method
+    negative_tokens: dumbbells, barbells, gym machines, food as hero prop, brand logos,
+      fitness-model glam, before-body shaming, gym-bro aesthetic, running or high-impact
+      jumping, yellow or golden haze, warm amber tones
+    objections: 'as lymph_exercise, and the signature one carries extra weight here: ''I
+      already walk and nothing changes'' — answered on rhythm, technique and timing rather
+      than on doing more. Keep the failed-remedy objection (dry brush, massage gun, creams,
+      compression) and the medical objection verbatim'
+    palette: cool outdoor greens and cool greys — sage, muted teal, cool blue-grey, early-morning
+      light. Avoid yellow and golden haze and warm amber
+    power_words: drain, de-bloat, flush, the swelling goes first, lighter legs, rings fit
+      again, morning puffiness, water weight, de-puff, heavy legs
+    prop_language: walking shoes, a morning path in light mist, a water bottle, a step counter
+      on a plain watch
+    wardrobe: 'comfortable walking shoes as the hero prop, leggings or joggers, a light
+      layer for a cool morning. Forbidden: gym-bro and CrossFit gear; compression socks
+      only inside a failed-remedy objection'
+  mediterranean_diet:
+    anchors:
+    - real food, no rules
+    - just eat the way Italians do
+    - you can eat this way for the rest of your life
+    - the body remembers how to feel alive
+    cast_lock: no East Asian features on the Mediterranean expert -- a frequent carry-over
+      from Asian Pilates sources. No overly muscular fitness-instructor body type
+    content_safety: 'a food vertical: no medical claims, no cure or treat framing'
+    copy_tone: a warm conversational mentor, never a drill sergeant. Sells SIMPLICITY ('no
+      rules') and SUSTAINABILITY ('for the rest of your life')
+    forbidden_lexicon: 'ZERO TIME-BASED LEXICON. Any phrase expressing the product as a
+      time activity -- ''X minutes a day'', ''a X-minute routine'', ''just N minutes'' --
+      is categorically forbidden, even freshly written and even phrased differently from
+      the reference. A diet is WHAT you eat, not how long you spend, and a minute-based
+      claim sounds identical to the exercise niches. Replace with FREQUENCY: ''daily'',
+      ''with every meal'', ''every morning'', ''three simple meals a day''. Single exception:
+      an explicit MEAL-PREP time (''a 20-minute pasta dinner'') is about cooking, not the
+      programme -- and is still better rephrased. This is the exact INVERSE of the activity
+      verticals, where the time lexicon is required and central. Also: the exercise mechanic
+      itself -- ''running or jumping'' becomes ''starving or calorie counting'', ''intense
+      workout'' becomes ''complicated meal plan'''
+    forbidden_names: never combined with the source's product name; never mixed with another
+      portfolio. ONE name per creative, in every scene, rotated between
+    hook_note: mirror the reference's hook structure; change the mechanic, not the shape
+    keep_out_of_negatives: olive oil, bread, tomatoes, ceramic plates, olive trees
+    locations: 'ADAPT gym-coded locations to Mediterranean ones -- a coastal apartment kitchen,
+      a village deck, a family olive grove. PRESERVE the universal ones: a pool or beach
+      stays a pool or beach (adapted to an Amalfi coast), a fitting-room mirror scene is
+      a powerful self-reflection moment and is kept, and a podcast studio is universal'
+    mechanic: eating the Mediterranean way -- real food, simple meals, no rules and no counting.
+      The mechanic is FOOD; an exercise mechanic in the source is swapped out, not kept
+      alongside
+    moves: 'none: this is a food vertical. Exercise as the product is removed'
+    names:
+    - Mediterranean Diet
+    - Mediterranean Challenge
+    - Mediterranean Reset
+    - Mediterranean Way
+    negative_tokens: gym equipment, yoga mats, pilates props, exercise gear, dumbbells,
+      workout machines, athletic studio aesthetic, East Asian features on the Mediterranean
+      expert character, overly muscular fitness instructor body type, brand logos
+    objections: 'keep the reference''s objection beats and swap only what breaks the niche.
+      The comparison target changes from the gym to starving and calorie counting: the answer
+      is simplicity and sustainability, not intensity'
+    palette: backgrounds and setting only -- warm terracotta, cream, sage green, olive,
+      sun-warmed gold. Where the scene is already modern or urban, do not force it; light
+      Mediterranean touches are enough
+    power_words: real food, no rules, simple meal swaps, the way Italians eat, olive oil,
+      fresh tomatoes, sourdough, three simple meals a day, ancient Mediterranean wisdom,
+      eat this way for the rest of your life
+    prop_language: olive oil, sourdough, fresh tomatoes, basil, oregano, lemons, feta, espresso
+      cups, ceramic plates; terracotta roofs, whitewashed stucco, olive groves, bougainvillea,
+      cypress trees
+    wardrobe: from the REFERENCE, not from the palette -- the Mediterranean colour scheme
+      is for backgrounds and setting only
+  menopause_yoga:
+    anchors:
+    - Gentle enough for this stage.
+    - Just 10 minutes on the mat.
+    - You're not alone — this is common.
+    - More than Kegels.
+    - Feel strong, confident, and at ease.
+    - No experience, no flexibility needed.
+    - A complement to your care, not a replacement.
+    cast_lock: women ~45-60, real and relatable, dignified; an instructor is often a same-age
+      woman (authority through lived experience). No youth-glam, no fitness-model gloss,
+      no patient framing. A male partner may appear only in a dignified, non-explicit moment
+    content_safety: Outranks everything including the producer's note. Intimacy is framed
+      through connection, confidence, closeness and comfort — never arousal, performance
+      or anything explicit. No cure or disease-treatment claims (never "cures incontinence",
+      "fixes dryness", "reverses menopause"); use "supports", "may help you feel", "as a
+      complement to your care". No guaranteed outcomes, no shame, no fear-mongering, no
+      aging-shame. Sensitive symptoms stay in a clinical-but-gentle register. Disclaimer
+      in the bottom safe zone on every pelvic or intimacy creative. This constrains HOW
+      the subject is expressed and never WHETHER it survives.
+    copy_tone: warm, reassuring, dignified, normalizing — a been-through-it guide, never
+      clinical, never shaming, never sensational
+    forbidden_lexicon: explicit or arousal/performance wording; cure-claim verbs (cure,
+      treat, fix, eliminate, reverse, 'stop leaks forever', 'heal prolapse'); food-as-mechanic
+      ('eat these 5 foods'); gym-bro (burn, shred, no pain no gain); 'skinny' and anti-aging
+      youth pressure
+    forbidden_names: no cure-y names ('Menopause Cure Yoga', 'Leak-Free Forever'), nothing
+      suggestive, and never combined with the source's product ('Keto Menopause Yoga')
+    keep_out_of_negatives: mat, chair, bolster, warm home setting, real 45-60 women
+    lipsync_swaps: Sanskrit and clinical terms break the voice model — say 'gentle squat'
+      not Malasana, 'pelvic-floor lift' not Ashwini mudra, 'deep breath' not pranayama,
+      'supported pose' not hypopressive. Keep any Sanskrit visual-only
+    locations: warm private home — living room, a sunlit corner with a mat, a bedroom treated
+      as a calm space. Privacy matters for the pelvic and intimacy layers; keep it intimate
+      but never suggestive
+    mechanic: gentle, menopause-appropriate yoga — joint-friendly, hormone-aware, done at
+      home in about ten minutes
+    moves: cat-cow, supported bridge, gentle seated twist, child's pose, legs-up-the-wall,
+      gentle squat, pelvic-floor breathing, standing forward fold with a chair. NEVER advanced,
+      inverted or hot-yoga-intensity poses as the hero
+    names:
+    - Menopause Yoga
+    - Pelvic-Floor Yoga
+    - 28-Day Menopause Yoga Challenge
+    - The Menopause Reset
+    - Yoga for This Chapter
+    - Yoga for Confidence & Closeness
+    negative_tokens: gym machines, food as hero prop, brand logos, advanced or inverted
+      yoga poses as hero, hot-yoga intensity, suggestive or sexual imagery, nudity, revealing
+      wardrobe, youth-glam fitness-model gloss, clinical or medical setting, before-body
+      shaming, cure-claim text, neon or cold gym palette
+    objections: 'keep verbatim — criticism of the gym or hard workouts (''Gym at 55? No
+      thanks''); comparison to the gym/HRT/Kegels, with the compared thing kept in BOTH
+      question and answer. Vertical-specific: ''is this safe/appropriate after menopause?'',
+      ''I''m embarrassed to talk about leaks/intimacy'', ''will anything really help?'',
+      ''isn''t it just Kegels?'', ''I''ve tried everything'''
+    palette: soft neutrals, warm rose/mauve, sage, gentle cream, warm light — dignified
+      and reassuring; avoid clinical white/blue, neon, youth-glam gloss
+    power_words: relief, calm, sleep, energy, less stiffness, feel like yourself, balance,
+      this chapter | pelvic-floor strength, bladder confidence, feel more in control, core
+      support, more than Kegels | confidence, closeness, intimacy, comfort, reconnect, at
+      ease in your body
+    prop_language: mat, a chair for supported poses, cushion or bolster, warm private home
+      setting; no clinical or gym imagery
+    wardrobe: comfortable, modest, real — soft tops, full-coverage leggings, cozy layers,
+      appropriate for women 45-60. Never revealing, suggestive, youth-glam or gym-bro
+  military:
+    anchors:
+    - No gym. No excuses.
+    - Just your bodyweight and 10 minutes.
+    - Discipline over motivation.
+    - The plan decides, not your mood.
+    - Structure beats willpower.
+    - You don't need to be a soldier.
+    - Scaled for beginners.
+    cast_lock: unlike the other activity verticals this audience can skew MALE or mixed
+      — preserve the reference's gender rather than defaulting female. Beginners and 40+
+      comeback 35-60, often male-leaning; a women's line 30-55; hardcore 25-45. A veteran
+      or ex-military trainer type reads as authority — fit and no-nonsense, never glam
+    content_safety: Never claim official affiliation with any real armed force, unit or
+      government programme, and never show real insignia or uniforms. "Military-style",
+      "inspired by military training" and "boot-camp-style" are fine. Firm coaching is fine;
+      abuse, hazing and humiliation are not. Scaling options must be shown for any beginner
+      or 40+ creative, and a "consult your doctor" line belongs in the safe zone.
+    copy_tone: disciplined coach or veteran trainer — firm, structured, motivating, no-excuses
+      but respectful and encouraging. Never abusive, never screaming, never humiliating,
+      never gym-bro-macho. A credible been-there authority who believes the viewer can do
+      it
+    forbidden_lexicon: 'food-as-mechanic; abuse and hazing tone (screaming drill-sergeant
+      abuse as the product, ''puke bucket'', humiliation) — firm is not abusive; gym machines
+      and barbells, which break the no-gym hook. Intensity words (push, work, sweat) are
+      ON-BRAND but CAPPED: never ''to failure'', ''beast mode'', ''no pain no gain'', ''destroy
+      yourself'' as the hero promise for a beginner or 40+ audience — injury-coded and it
+      repels them'
+    forbidden_names: no 'Navy SEAL Extreme Shred'; never a real unit or force name as the
+      product (Navy SEALs, Green Berets) — trademark and impersonation risk. 'Military-style',
+      'tactical', 'boot-camp-style' are fine. Never combined with the source's product ('Yoga
+      Boot Camp', 'Pilates Tactical')
+    keep_out_of_negatives: mat, bodyweight, olive/tactical wardrobe, home, garage and outdoor
+      settings
+    lipsync_swaps: the voice model mangles the jargon — say 'push-ups', 'squats', '10 minutes,
+      no rest', 'one round', 'bodyweight only' rather than burpee, AMRAP, EMOM, calisthenics,
+      tactical. Keep the jargon visual-only
+    locations: home living room or garage with a mat, a backyard, a driveway, a bare room,
+      an outdoor park. Utilitarian and no-frills, never a luxe studio
+    mechanic: structured bodyweight movement at home — no gym, no equipment, one short session
+      a day
+    moves: push-ups including knee and incline scaling, squats, lunges, planks, mountain
+      climbers, march-in-place, sit-ups. NEVER injury-coded hero stunts (max-effort ballistic
+      movements, one-arm push-ups, 'to failure') for a beginner or 40+ sub-vertical. Showing
+      the scaling is what makes the no-excuses promise believable
+    names:
+    - Military Workout
+    - Bodyweight Boot Camp
+    - 28-Day Military Fitness Challenge
+    - Back-in-Ranks Reset
+    - The Comeback Drill
+    - Discipline Over Motivation
+    - The No-Gym Method
+    negative_tokens: gym machines, barbells, heavy iron, food as hero prop, brand logos,
+      real military insignia or uniform, camo cosplay, drill-sergeant abuse or hazing imagery,
+      injury-coded max-effort stunts as hero, fitness-model glam, before-body shaming, pastel
+      spa palette
+    objections: 'keep verbatim — gym, membership and no-time criticism (''Gym after 40?
+      No thanks'', ''memberships I never use''), with the gym kept in BOTH question and
+      answer. Vertical-specific: ''I''m too old / out of shape for military training'' (answer:
+      beginner-scaled, at your own pace — discipline, not punishment), ''I have bad knees
+      or back'' (scaled options plus a disclaimer), ''I don''t have equipment or space'',
+      ''I have no discipline'' (answer: that is what the structure is for), ''isn''t this
+      just for young soldiers?'''
+    palette: grounded and utilitarian — olive/army green, charcoal, sand/khaki, steel grey,
+      warm black. High-contrast and confident; avoid pastel-spa palettes and neon gym-bro
+      red/black. Real bodies, real sweat, real light
+    power_words: discipline, structure, no excuses, earn it, get after it, one round, drill,
+      consistency, back in shape, no gym needed, just your bodyweight
+    prop_language: a mat, maybe a pull-up bar or a loaded backpack; a bare room, garage
+      or yard; stencil type
+    wardrobe: 'plain athletic wear; tactical, olive and neutral tones read on-brand (olive
+      tee, joggers, plain trainers). Forbidden: glossy fitness-model glam, CrossFit-competition
+      kit, actual military uniforms or insignia, camo worn as cosplay. Light tactical cues
+      are fine'
+  pilates:
+    anchors:
+    - You don't need to be flexible or coordinated.
+    - Just a mat.
+    - Just a wall.
+    - Low-impact, kind to your joints.
+    - Long, lean, and strong.
+    - No experience needed.
+    - 15 minutes, right in your living room.
+    cast_lock: the audience is ~95% female and male models are not used by default. Beginners
+      45-65; Seniors 60-75+; Sculpt 30-50; Prenatal 28-40. The house aesthetic is editorial
+      — faces are often partially obscured (low bun, three-quarter from behind) in withholding
+      concepts
+    copy_tone: elegant, precise, calmly authoritative, encouraging — a little more editorial
+      than yoga's register, never gym-bro, never condescending
+    forbidden_lexicon: '''skinny'' — say long, lean, toned instead; food-as-mechanic; gym-bro
+      (reps to failure, burn, shred, beast mode, no pain no gain, PRs, HIIT). NOTE ''core
+      / control / sculpt'' is Pilates vocabulary, not gym-bro — keep it'
+    forbidden_names: no 'Pilates Power Shred' / 'Extreme Reformer Burn'; never combined
+      with the source's product ('Yoga Pilates', 'Mediterranean Pilates'); never mix sub-verticals
+      ('Wall Reformer Pilates')
+    keep_out_of_negatives: reformer, magic circle, mat, grip-socks
+    lipsync_swaps: the voice model mangles the signature terms — say 'the machine' not reformer,
+      'small pulses' not the hundred, 'roll up slowly' not roll-up, 'core' not powerhouse,
+      'hold and control' not neutral spine. Keep the terms visual-only
+    locations: home living room with a mat, an elegant home studio, at the wall for Wall
+      Pilates, a clean bright reformer studio, by the window
+    mechanic: controlled low-impact movement — mat, wall, or reformer, about fifteen minutes
+      a day
+    moves: roll-up, bridge, gentle hundred, leg circles, chest lift, cat-cow, the wall series,
+      standing roll-down. NEVER teaser, boomerang, control balance or advanced reformer
+      tricks as the hero
+    names:
+    - Pilates for Beginners
+    - Wall Pilates
+    - 28-Day Pilates Challenge
+    - The Pilates Reset
+    - The Pilates Method
+    - Long, Lean, Strong
+    negative_tokens: dumbbells, barbells, treadmill, gym machines, food as hero prop, brand
+      logos, advanced Pilates (teaser/boomerang) as hero, fitness-model glam, before-body
+      shaming, gym-bro aesthetic, cold blue or neon gym palette
+    objections: 'keep verbatim — gym and cardio criticism (''cardio wrecked my knees'',
+      ''hours of cardio and nothing changed''), with the gym kept in BOTH question and answer.
+      Vertical-specific: ''isn''t Pilates just for dancers / young / flexible people?'',
+      ''the reformer or studio is too expensive'' (answer: all you need is a mat, or just
+      a wall), ''I''m not coordinated'', ''bad back / bad knees'''
+    palette: 'warm cream #F5EFE6, terracotta #C97B5C, sage #9CAF88, warm black #2A2520,
+      dusty rose. Editorial and elegant; avoid cold blues, neon, gym black/red, and yellow
+      haze'
+    power_words: control, core, powerhouse, long lean lines, precision, low-impact, sculpt,
+      flat stomach, lengthen and strengthen
+    prop_language: mat, reformer, magic circle, grip-socks, studio light
+    wardrobe: 'a Pilates set with grip-socks — a signature prop, keep it. Forbidden: gym-bro
+      tanks, ''shred'' aesthetic, CrossFit gear. For 45+ real and modest'
+  yoga:
+    anchors:
+    - You don't have to touch your toes.
+    - If you can breathe, you can do this.
+    - Just ten minutes on the mat.
+    - No experience needed.
+    - Start on the floor. Or start in a chair.
+    cast_lock: real women, not fitness models. Beginners 45-65; Seniors 60-75+; Prenatal
+      28-40. Do not youthify for beauty
+    copy_tone: warm, calm, encouraging, permission-giving — never a drill sergeant, never
+      condescending
+    forbidden_lexicon: food-as-mechanic ('eat these 5 foods', 'meal plan', 'caloric deficit');
+      gym-bro (reps, sets, burn, shred, crush it, no pain no gain, PRs, beast mode)
+    forbidden_names: no 'Yoga Power Blast' / 'Extreme Yoga Shred'; never combined with the
+      source's product ('Pilates Yoga', 'Mediterranean Yoga')
+    keep_out_of_negatives: mat, block, strap, blanket, bolster
+    lipsync_swaps: the voice model mangles Sanskrit — say 'pose' not asana, 'breath' not
+      pranayama, 'final rest' not savasana, 'flow' not vinyasa. Keep Sanskrit visual-only,
+      never in a spoken line
+    locations: living room with a mat, a sunny home studio, a bedroom by the window, a wooden
+      deck or garden, a quiet corner. The mat stays almost always
+    mechanic: gentle movement on the mat — achievable poses and flows, about ten minutes
+      a day
+    moves: mountain, cat-cow, seated forward fold with bent knees, child's pose, chair-supported
+      poses, gentle twist, warrior. NEVER inversions or arm balances as the hero — for a
+      beginner or 45+ audience it kills trust
+    names:
+    - Yoga for Beginners
+    - 30-Day Yoga Challenge
+    - 7-Day Yoga Reset
+    - Morning Yoga Reset
+    - Gentle Yoga Flow
+    - Yoga for a Body That's Changed
+    negative_tokens: gym equipment, dumbbells, barbells, treadmill, food as hero prop, brand
+      logos, advanced/inversion/pretzel yoga poses, fitness-model glam, before-body shaming,
+      gym-bro aesthetic, Sanskrit text on screen
+    objections: 'keep verbatim — gym and hard-training criticism (''Gym after 45? No thanks'',
+      ''cardio wrecked my knees''), with the gym kept in BOTH question and answer. Vertical-specific:
+      ''I''m too stiff / not flexible enough'' (the #1 barrier), ''I''m too old'', ''I''ll
+      hurt myself / bad back / bad knees'', ''I can''t get down on or up off the floor''
+      (answer with chair yoga), ''no time'' (seven to ten minutes), ''I tried yoga once
+      and felt lost'''
+    palette: calm wellness — sage, oat, terracotta, cream. Real bodies, real light, no yellow
+      haze
+    power_words: gentle, looser, stronger, calmer, steady, moves without pain, no experience
+      needed, ten minutes, on the mat
+    prop_language: mat, block, strap, blanket, bolster, morning light
+    wardrobe: 'leggings, a set, loungewear — the norm and needed here. Forbidden: gym-bro
+      tanks, ''shred'' aesthetic, CrossFit gear. For 45+ keep it real and modest, like the
+      viewer''s own'
+  yoga_men:
+    anchors:
+    - You don't need to be flexible. That's the point.
+    - Ten minutes on the floor, before the day starts.
+    - If you can breathe, you can do this.
+    - No chanting. No incense. Just the stretch.
+    - Built for stiff hips and a locked-up lower back.
+    - You can do the whole thing in shorts and a t-shirt.
+    cast_lock: 'MEN — this is the exception to the house default. Real men, not fitness
+      models: 35-55 desk-and-family builds for the mobility angle, 55-70 for the stiffness-and-balance
+      angle. Ordinary bodies, some carrying weight, some grey. Never a shirtless athlete,
+      never a yoga influencer'
+    content_safety: 'Movement for mobility and comfort, never treatment: "helps you move
+      easier", "loosens up", "supports mobility" — never "fixes your back", "cures sciatica",
+      "realigns your spine" or any claim about a disc, a nerve or an injury. Anyone describing
+      real back pain is answered with "talk to your doctor or physio" alongside the gentle
+      option. No shame about weight, stiffness or age, and no implication that a man doing
+      yoga is unusual or brave — that framing is the insult this vertical exists to avoid.'
+    copy_tone: plain, practical, matter-of-fact and a bit dry. Talks to him like a capable
+      adult with a stiff back, never like a beginner who needs coaxing. No mysticism, no
+      drill sergeant, no jokes at his expense
+    forbidden_lexicon: 'gym-bro (reps, sets, burn, shred, crush it, no pain no gain, PRs,
+      beast mode) — the audience is escaping that register, not looking for it. Also forbidden:
+      the spa-wellness register that reads as not-for-him (goddess, sacred, feminine energy,
+      glow, yoni, moon cycle); food-as-mechanic; and any joke at his expense about being
+      bad at yoga'
+    forbidden_names: no 'Broga', 'Man Flow', 'Yoga Shred', 'Warrior Beast' or any name that
+      treats a man doing yoga as a joke or a dare; never combined with the source's product
+      ('Pilates Yoga', 'Keto Yoga'); no 'Extreme'/'Blast'
+    hook_note: STIFFNESS-FIRST — open on the body complaint (a back that will not loosen,
+      hips locked from sitting, bending down and feeling it), never on yoga itself. Naming
+      yoga in the first line is what loses this audience
+    keep_out_of_negatives: mat, block, towel, t-shirt, shorts
+    lipsync_swaps: the voice model mangles Sanskrit and it is wrong for this register anyway
+      — say 'pose' not asana, 'breath' not pranayama, 'final rest' not savasana, 'flow'
+      not vinyasa. Keep Sanskrit out of spoken lines entirely
+    locations: a plain living room with a mat, a garage or home gym corner with the weights
+      clearly NOT in use, a bedroom floor at first light, a back garden or deck. Ordinary
+      rooms, lived-in, no studio polish
+    mechanic: gentle movement on the mat, built for stiff bodies — achievable poses and
+      simple flows, about ten minutes a day
+    moves: cat-cow, world's greatest stretch, low lunge, figure-four, seated forward fold
+      with BENT knees, thoracic rotation, child's pose, standing hamstring hinge, 90/90
+      hips. NEVER inversions, arm balances, splits or deep backbends as the hero — for a
+      stiff beginner it kills trust instantly
+    names:
+    - Yoga for Men
+    - Yoga for Stiff Guys
+    - 30-Day Mobility Challenge
+    - The Morning Mobility Reset
+    - 10-Minute Yoga for Men
+    - Yoga for Bad Backs
+    negative_tokens: gym equipment in use, dumbbells, barbells, treadmill, food as hero
+      prop, brand logos, advanced/inversion/pretzel poses, shirtless glam, fitness-model
+      physique, incense, candles, Sanskrit text on screen, lotus and mandala graphics, before-body
+      shaming, gym-bro aesthetic
+    objections: 'keep verbatim — the gym and hard-training criticism carries over (''lifting
+      wrecked my shoulders'', ''cardio killed my knees''), gym kept in BOTH question and
+      answer. Vertical-specific and load-bearing: ''yoga isn''t for men'' (the #1 barrier
+      — answer on mobility and pain, never on spirituality), ''I''m the least flexible person
+      alive'', ''I''d feel stupid in a class'' (answer: this is at home, nobody is watching),
+      ''I''m too heavy to get on the floor'', ''my back is already bad'', ''I don''t have
+      time'''
+    palette: muted and unfussy — slate, olive, warm grey, oat, dark denim blue. Natural
+      window light. Avoid the pastel wellness palette, avoid candle-lit spa styling, avoid
+      yellow haze
+    power_words: stiff, tight hips, locked-up back, mobility, range of motion, loosen up,
+      move without pain, ten minutes, no flexibility needed, straighten up, sleep better
+    prop_language: mat, a block used as a prop for stiff hips, a folded towel, a water glass,
+      morning light through a plain window
+    wardrobe: 'a t-shirt and shorts or joggers, bare feet — what he already owns. Forbidden:
+      shirtless hero shots, compression gear, CrossFit or gym-bro kit, branded activewear,
+      and anything that reads as a yoga-studio uniform'

@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import costs, drivers, naming, refkind
+from .. import costs, drivers, lore, naming, refkind
 from . import banner_steps
 from ..assemble import (SIZES, AssembleError, build_final, disclaimer_for,
                         music_for, packshot_for)
@@ -310,7 +310,8 @@ def prompts(ctx: StageContext) -> None:
                    "scene_count": count})
     brief = (_prompts_brief(ctx, count) + drivers.writer_block(ctx.job)
              + _morph_block(ctx) + BODY_ANCHOR
-             + (refkind.WRITER_RULES if refkind.is_replica(ctx.job) else ""))
+             + (refkind.WRITER_RULES if refkind.is_replica(ctx.job) else "")
+             + lore.writer_block(ctx.config, ctx.job.intake.get("vertical", "")))
     result = ctx.providers.backend_for("text").generate(
         "text", model, brief, params=params)
     if result.credits:
@@ -849,6 +850,30 @@ def _style_frames(ctx: StageContext) -> List[str]:
     return frames
 
 
+NEGATIVE_BLOCK = """
+
+NEGATIVE PROMPT -- these must not appear in the frame:
+{tokens}
+
+Do NOT negate these: {keep}. They are this niche's own subject, and excluding
+them removes the thing the creative is about.
+"""
+
+
+def _with_negatives(ctx: StageContext, prompt: str) -> str:
+    """The niche's forbidden tokens, appended to a generation prompt.
+
+    Appended by the CODE rather than asked of the writer: the source templates
+    call this list mandatory for every generation, and a list a language model
+    is asked to reproduce is a list that drifts."""
+    vertical = ctx.job.intake.get("vertical", "")
+    tokens = lore.negatives(ctx.config, vertical)
+    if not tokens:
+        return prompt
+    keep = lore.protected_props(ctx.config, vertical) or "the props named above"
+    return prompt + NEGATIVE_BLOCK.format(tokens=tokens, keep=keep)
+
+
 def plates(ctx: StageContext) -> None:
     """Step 4: one plate per scene, with per-photo QA and auto-regeneration.
 
@@ -877,9 +902,10 @@ def plates(ctx: StageContext) -> None:
         while True:
             out = ctx.dir("plates") / f"scene_{scene.idx:02d}.png"
             anchors = ctx.job.anchors_for(scene, limit) if _anchoring(ctx) else []
-            prompt = refkind.anchor_block(len(style)) + _with_anchor(
+            prompt = _with_negatives(ctx, refkind.anchor_block(len(style))
+                                     + _with_anchor(
                 _steer(scene.image_prompt, note if scene.idx in redo else ""),
-                len(anchors))
+                len(anchors)))
             driver = drivers.for_scene(ctx.job, scene)
             template = None
             if driver:
@@ -1059,7 +1085,8 @@ def clips(ctx: StageContext) -> None:
                 f"can make. Drop one before the clips are bought.")
         while True:
             out = ctx.dir("clips") / f"scene_{scene.idx:02d}.mp4"
-            prompt = _steer(scene.video_prompt, note if scene.idx in redo else "")
+            prompt = _with_negatives(
+                ctx, _steer(scene.video_prompt, note if scene.idx in redo else ""))
             shot_model = (drivers.engine_model(driver["engine"], model)
                           if driver else model)
             params = {"duration": scene.duration_s,
