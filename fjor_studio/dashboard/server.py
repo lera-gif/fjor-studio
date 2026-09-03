@@ -232,9 +232,29 @@ class Studio:
             "derived_from": job.meta.get("derived_from"),
             "derivatives": job.meta.get("derivatives") or [],
             "edit": self._edit(cfg, job),
+            "regen_notes": self._regen_notes(cfg, job),
             "next_id": self._next_id(cfg, store, job),
             "derive_name": self._suggested_name(cfg, store, job),
         }
+
+    def _regen_notes(self, cfg, job) -> Dict[str, Dict[str, str]]:
+        """Per scene, the QA findings as the note a Regenerate would send --
+        so the producer's button on a card starts from what QA already said,
+        not from a blank box. Silence complaints are dropped for a shot whose
+        line is spoken separately, or when the voice track is external."""
+        from ..qa.policy import regeneration_note
+        src = str(((cfg.pipeline or {}).get("voice") or {}).get("source", "seedance"))
+        external = src.strip().lower() not in ("seedance", "video", "in-model")
+        out: Dict[str, Dict[str, str]] = {}
+        for s in job.scenes:
+            silent = external or str(s.get("voice") or "on_camera") != "on_camera"
+            out[str(s["idx"])] = {
+                "plate": regeneration_note(((s.get("plate_qa") or {}).get("issues")
+                                            or []), True),
+                "clip": regeneration_note(((s.get("clip_qa") or {}).get("issues")
+                                           or []), silent),
+            }
+        return out
 
     def _edit(self, cfg, job) -> Dict[str, Any]:
         """The editor bar's state and the libraries it offers from.

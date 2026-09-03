@@ -19,7 +19,13 @@ _SPEECH_ONLY = re.compile(
     r"\b(no (speech|dialogue|audio|voice|sound)|silen(t|ce)|not? speaking|"
     r"does ?n[o']?t speak|mouth (stays |remains )?closed|no lip[- ]?sync|"
     r"lip[- ]?sync (is )?absent|no words|inaudible|says nothing|"
-    r"dialogue (is )?missing|missing dialogue|no spoken)\b", re.I)
+    r"dialogue (is )?missing|missing dialogue|no spoken|"
+    # the phrasings the QA model actually uses for a shot whose line is spoken
+    # separately: "Missing audio voiceover", "Missing voiceover dialogue",
+    # "Audio dialogue is missing"
+    r"missing (audio |voice ?over |voiceover )?(voice ?over|dialogue|audio|speech)|"
+    r"(audio|voice ?over|voiceover|speech)( dialogue)? (is )?missing|"
+    r"no voice ?over)\b", re.I)
 
 
 @dataclass
@@ -64,6 +70,25 @@ def is_speech_only(verdict: Verdict) -> bool:
     if not verdict.issues:
         return False
     return all(_SPEECH_ONLY.search(issue) for issue in verdict.issues)
+
+
+def regeneration_note(issues: List[str], silent_by_design: bool) -> str:
+    """The QA findings, phrased as the note a regeneration is steered by.
+
+    A verdict's issues are written for a producer; the note is read by the
+    generator, appended to the approved prompt. Complaints about silence are
+    dropped when the shot was MEANT to be silent -- its line is spoken
+    separately -- because telling the video model "the voiceover is missing"
+    is asking it to invent a soundtrack, which is what gets a generation
+    refused (BPW026). Everything else is passed through as written: the QA
+    model saw the frame and named what was wrong with it."""
+    kept = [str(i).strip().rstrip(".") for i in (issues or []) if str(i).strip()]
+    if silent_by_design:
+        kept = [i for i in kept if not _SPEECH_ONLY.search(i)]
+    if not kept:
+        return ""
+    return ("The previous attempt was rejected by QA for: "
+            + "; ".join(kept) + ". Fix these and change nothing else.")
 
 
 def apply_voice_context(verdict: Verdict, voice_is_external: bool) -> Verdict:

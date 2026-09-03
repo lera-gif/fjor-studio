@@ -176,3 +176,40 @@ def test_the_page_carries_the_new_controls():
                    "keepClip(", "reopenCut()", "savePrompt(", "toggleBed(",
                    "openLibrary", "/api/verticals", "libSelect(", "setEdit('hook'"):
         assert needle in PAGE.replace("\\'", "'"), needle
+
+
+# -- regenerate starts from what QA found -------------------------------------
+
+def test_the_regeneration_note_is_the_qa_findings_minus_intended_silence():
+    from fjor_studio.qa.policy import regeneration_note
+    issues = ["Missing audio voiceover", "Foot anatomy distortion during extension."]
+    assert regeneration_note(issues, silent_by_design=True) == (
+        "The previous attempt was rejected by QA for: Foot anatomy distortion "
+        "during extension. Fix these and change nothing else.")
+    on_camera = regeneration_note(issues, silent_by_design=False)
+    assert "Missing audio voiceover; Foot anatomy" in on_camera
+    assert regeneration_note(["No speech"], silent_by_design=True) == ""
+    assert regeneration_note([], silent_by_design=False) == ""
+
+
+def test_each_shot_carries_its_own_regeneration_note(home, reference):
+    bad = json.dumps({"passed": False, "severity": "critical",
+                      "issues": ["Missing dialogue", "Extra fingers on the left hand"]})
+    write_config(home, pipeline={"gates": {"skip": ["GATE_PLAN", "GATE_CLIPS"]}})
+    write_replies(home, analysis="analysed", text=scene_plan(2),
+                  **{"qa:plate": qa_ok(), "qa:clip": bad})
+    cfg, store, _engine = open_studio(home)
+    job = make_job(store, reference, scenes=2, config=cfg)
+    from fjor_studio.dashboard.server import Studio
+    studio = Studio(home)
+    _cfg, store, engine = studio.open()
+    job = engine.run(store.load(job.id))    # GATE_PLATES: the scenes exist now
+    job.scenes[1]["voice"] = "vo"           # its line is spoken separately
+    store.save(job)
+    job = engine.approve(job)               # buys the clips, QA fails them
+    notes = studio.detail(job.id)["regen_notes"]
+    assert "Missing dialogue; Extra fingers" in notes["0"]["clip"]
+    assert notes["1"]["clip"] == ("The previous attempt was rejected by QA for: "
+                                  "Extra fingers on the left hand. Fix these and "
+                                  "change nothing else.")
+    assert notes["0"]["plate"] == ""        # the plates passed

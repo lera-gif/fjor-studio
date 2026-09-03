@@ -646,8 +646,10 @@ function sceneActs(s,kind){
   const can=atGate&&(d.revisable||[]).some(w=>(REV_ALIAS[w]||w)===target);
   const has=kind==='clip'?s.clip:s.plate;
   let html='';
+  const found=(d.regen_notes&&d.regen_notes[s.idx]&&d.regen_notes[s.idx][kind==='clip'?'clip':'plate'])||'';
   if(can&&has) html+=`<button ${busy?'disabled':''} onclick="openRevise('${target}',${s.idx})"
-    title="buy this ${kind==='clip'?'animation':'still'} again, with a note">Regenerate…</button>`;
+    title="${found?'buy this '+(kind==='clip'?'animation':'still')+' again, steered by what QA found'
+                 :'buy this '+(kind==='clip'?'animation':'still')+' again, with a note'}">${found?'Regenerate — fix QA findings…':'Regenerate…'}</button>`;
   if(kind==='clip'&&s.clip) html+=`<button ${busy?'disabled':''} onclick="keepClip(${s.idx})"
     title="copy this shot into the library to reuse in another creative">Keep in library</button>`;
   return html?`<div class="acts">${html}</div>`:'';
@@ -1593,14 +1595,20 @@ const REV_ALIAS={plate:'plates',photos:'plates',clip:'clips',animation:'clips',m
   captions:'assembly',subtitles:'assembly',music:'assembly'};
 function openRevise(what,scene){
   const d=DETAIL;
-  $('#revHint').textContent=`At ${d.state}. Anything you send back re-runs forward and stops here again.`;
+  // The note starts as what QA found on that shot. The finding names what was
+  // wrong with the frame, which is exactly what the regeneration must fix; a
+  // blank box asked the producer to retype it from the card above.
+  const found=(scene!=null&&d.regen_notes&&d.regen_notes[scene])
+    ? (d.regen_notes[scene][what==='clips'?'clip':'plate']||'') : '';
+  $('#revHint').textContent=`At ${d.state}. Anything you send back re-runs forward and stops here again.`
+    +(found?' The note below is what QA found on this shot — edit it or add to it.':'');
   const targets=[...new Set(d.revisable.map(w=>REV_ALIAS[w]||w))];
   $('#revWhat').innerHTML=targets.map(w=>`<option value="${esc(w)}" ${w===what?'selected':''}>${esc(REV_LABELS[w]||w)}</option>`).join('');
   $('#revScenes').innerHTML=d.scenes.map(s=>
     `<label style="display:flex;gap:5px;align-items:center;text-transform:none;
       letter-spacing:0;font-size:13px;color:var(--ink);width:auto">
       <input type="checkbox" value="${s.idx}" style="width:auto" ${s.idx===scene?'checked':''}> ${s.idx}</label>`).join('');
-  $('#revNote').value='';
+  $('#revNote').value=found;
   revDlg.showModal();
 }
 $('#revGo').onclick=async()=>{
