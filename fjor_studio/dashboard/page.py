@@ -443,7 +443,8 @@ textarea.prompt-edit{font:12px/1.5 ui-monospace,Menlo,monospace;min-height:84px;
   <div><label>What</label><select id="revWhat"></select></div>
   <div style="margin-top:12px"><label>Scenes (blank = all that need it)</label>
     <div class="row" id="revScenes"></div></div>
-  <div style="margin-top:12px"><label>Note — this steers the regeneration</label>
+  <div id="revNotes"></div>
+  <div style="margin-top:12px"><label>Note for every shot sent back — optional</label>
     <textarea id="revNote" placeholder="e.g. she starts already lying on her side"></textarea></div>
   <div class="row end" style="margin-top:18px">
     <button type="button" onclick="revDlg.close()">Cancel</button>
@@ -1593,28 +1594,48 @@ const REV_LABELS={plates:'the still (plates) — the clip is animated from it, s
 const REV_ALIAS={plate:'plates',photos:'plates',clip:'clips',animation:'clips',motion:'clips',
   script:'prompts',copy:'prompts',plan:'analysis',vo:'voice',draft:'assembly',
   captions:'assembly',subtitles:'assembly',music:'assembly'};
+// Each ticked shot gets its OWN note, prefilled with what QA found on it. One
+// note for eight shots would send scene 2's finding to all eight and lose the
+// other seven -- the findings name what was wrong with THAT frame.
+let REV_NOTES={};
+function revTarget(){ return $('#revWhat').value==='clips'?'clip':'plate'; }
+function revFound(idx){
+  const d=DETAIL, t=revTarget();
+  return (d.regen_notes&&d.regen_notes[idx]&&d.regen_notes[idx][t])||'';
+}
+function renderRevNotes(){
+  const ticked=[...document.querySelectorAll('#revScenes input:checked')].map(i=>+i.value);
+  const perShot=['clips','plates'].includes($('#revWhat').value);
+  $('#revNotes').innerHTML = (perShot&&ticked.length) ? ticked.map(idx=>{
+    const key=revTarget()+'|'+idx;
+    const val=key in REV_NOTES?REV_NOTES[key]:revFound(idx);
+    return `<div style="margin-top:12px"><label>Scene ${idx}${revFound(idx)?' — what QA found, edit it or add to it':' — note'}</label>
+      <textarea style="min-height:52px" oninput="REV_NOTES['${key}']=this.value">${esc(val)}</textarea></div>`;
+  }).join('') : '';
+}
 function openRevise(what,scene){
   const d=DETAIL;
-  // The note starts as what QA found on that shot. The finding names what was
-  // wrong with the frame, which is exactly what the regeneration must fix; a
-  // blank box asked the producer to retype it from the card above.
-  const found=(scene!=null&&d.regen_notes&&d.regen_notes[scene])
-    ? (d.regen_notes[scene][what==='clips'?'clip':'plate']||'') : '';
-  $('#revHint').textContent=`At ${d.state}. Anything you send back re-runs forward and stops here again.`
-    +(found?' The note below is what QA found on this shot — edit it or add to it.':'');
+  REV_NOTES={};
+  $('#revHint').textContent=`At ${d.state}. Anything you send back re-runs forward and stops here again.`;
   const targets=[...new Set(d.revisable.map(w=>REV_ALIAS[w]||w))];
   $('#revWhat').innerHTML=targets.map(w=>`<option value="${esc(w)}" ${w===what?'selected':''}>${esc(REV_LABELS[w]||w)}</option>`).join('');
+  $('#revWhat').onchange=renderRevNotes;
   $('#revScenes').innerHTML=d.scenes.map(s=>
     `<label style="display:flex;gap:5px;align-items:center;text-transform:none;
       letter-spacing:0;font-size:13px;color:var(--ink);width:auto">
-      <input type="checkbox" value="${s.idx}" style="width:auto" ${s.idx===scene?'checked':''}> ${s.idx}</label>`).join('');
-  $('#revNote').value=found;
+      <input type="checkbox" value="${s.idx}" style="width:auto" ${s.idx===scene?'checked':''}
+        onchange="renderRevNotes()"> ${s.idx}</label>`).join('');
+  $('#revNote').value='';
+  renderRevNotes();
   revDlg.showModal();
 }
 $('#revGo').onclick=async()=>{
   const scenes=[...document.querySelectorAll('#revScenes input:checked')].map(i=>+i.value);
+  const notes={}; const t=revTarget();
+  if(['clips','plates'].includes($('#revWhat').value))
+    for(const idx of scenes){ const key=t+'|'+idx; const v=(key in REV_NOTES?REV_NOTES[key]:revFound(idx)).trim(); if(v) notes[idx]=v; }
   revDlg.close();
-  await act('revise',{what:$('#revWhat').value,note:$('#revNote').value,scenes});
+  await act('revise',{what:$('#revWhat').value,note:$('#revNote').value,scenes,notes});
 };
 // The browser will not hand over a dropped file's path -- there isn't one to
 // give -- so the bytes are uploaded and the server answers with a path it can

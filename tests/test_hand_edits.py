@@ -213,3 +213,35 @@ def test_each_shot_carries_its_own_regeneration_note(home, reference):
                                   "Extra fingers on the left hand. Fix these and "
                                   "change nothing else.")
     assert notes["0"]["plate"] == ""        # the plates passed
+
+
+def test_each_shot_sent_back_is_steered_by_its_own_note(home, reference):
+    _cfg, _store, engine, job = setup(home, reference, scenes=3)
+    job = engine.approve(engine.run(job))
+    assert job.state == "GATE_DRAFT"
+    backend = engine.providers.backend_for("video")
+    def submits():
+        return [c for c in backend.calls if c["op"] == "submit" and c["kind"] == "video"]
+    before = len(submits())
+    job = engine.revise(job, "clips", "keep the wardrobe", scenes=[0],
+                        notes={1: "her hand passes through the chair", 2: ""})
+    new = submits()[before:]
+    assert len(new) == 3, "scene 2 is named in notes, so it is sent back too"
+    by_prompt = {c["prompt"]: c for c in new}
+    texts = list(by_prompt)
+    s0 = next(t for t in texts if "motion 0" in t)
+    s1 = next(t for t in texts if "motion 1" in t)
+    s2 = next(t for t in texts if "motion 2" in t)
+    assert "keep the wardrobe" in s0 and "chair" not in s0
+    assert "keep the wardrobe" in s1 and "her hand passes through the chair" in s1
+    assert "keep the wardrobe" in s2 and "chair" not in s2
+    assert job.revisions[-1]["notes"] == {"1": "her hand passes through the chair"}
+    assert sorted(job.revisions[-1]["scenes"]) == [0, 1, 2]
+    with pytest.raises(TransitionError, match="no scene 9"):
+        engine.revise(job, "clips", "", scenes=[0], notes={9: "x"})
+
+
+def test_the_dialog_sends_one_note_per_ticked_shot():
+    from fjor_studio.dashboard.page import PAGE
+    assert 'id="revNotes"' in PAGE
+    assert "notes[idx]=v" in PAGE and "scenes,notes})" in PAGE

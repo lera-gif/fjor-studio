@@ -245,7 +245,12 @@ class Engine:
         return self.run(job)
 
     def revise(self, job: Job, what: str, note: str = "",
-               scenes: Optional[List[int]] = None) -> Job:
+               scenes: Optional[List[int]] = None,
+               notes: Optional[Dict[Any, str]] = None) -> Job:
+        """`note` steers every shot sent back; `notes` is a note per shot,
+        keyed by scene, for when each came back wrong in its own way -- one
+        note for eight shots would send scene 2's finding to all eight and
+        lose the other seven. A shot named in `notes` is sent back."""
         if job.state not in GATES:
             raise TransitionError(f"job {job.id} is in '{job.state}', not at a gate")
         options = REVISABLE[job.state]
@@ -257,8 +262,19 @@ class Engine:
         # `scenes` narrows the redo to the shots the producer commented on --
         # everything else is already paid for and approved
         picked = [int(s) for s in (scenes or [])]
+        per_scene: Dict[str, str] = {}
+        known = {s["idx"] for s in job.scenes}
+        for key, text in (notes or {}).items():
+            idx = int(key)
+            if idx not in known:
+                raise TransitionError(f"job {job.id} has no scene {idx}")
+            if str(text or "").strip():
+                per_scene[str(idx)] = str(text).strip()
+            if idx not in picked:
+                picked.append(idx)
         job.revisions.append({"gate": job.state, "what": what, "note": note,
-                              "scenes": picked, "at": job.updated_at})
+                              "scenes": picked, "notes": per_scene,
+                              "at": job.updated_at})
         job.add_event("revision_requested",
                       (f"{what} (scene {', '.join(map(str, picked))})" if picked
                        else what) + (f": {note}" if note else ""))

@@ -72,6 +72,19 @@ def _targets(ctx: StageContext, stage: str) -> Tuple[List[int], str]:
     return [int(i) for i in (rev.get("scenes") or [])], str(rev.get("note") or "")
 
 
+def _scene_note(ctx: StageContext, stage: str, idx: int) -> str:
+    """The note that steers ONE shot: the note for every shot sent back, then
+    the note written for this shot. Empty for a shot not being redone."""
+    rev = _revision(ctx, stage)
+    if not rev or rev.get("consumed"):
+        return ""
+    if int(idx) not in [int(i) for i in (rev.get("scenes") or [])]:
+        return ""
+    per = rev.get("notes") or {}
+    mine = str(per.get(str(idx)) or per.get(idx) or "").strip()
+    return "\n".join(p for p in (str(rev.get("note") or "").strip(), mine) if p)
+
+
 def _consume(ctx: StageContext, stage: str) -> None:
     """Mark the revision done, so a later re-run of this stage does not redo it
     again and pay twice."""
@@ -922,7 +935,7 @@ def plates(ctx: StageContext) -> None:
             anchors = ctx.job.anchors_for(scene, limit) if _anchoring(ctx) else []
             prompt = _with_negatives(ctx, refkind.anchor_block(len(style))
                                      + _with_anchor(
-                _steer(scene.image_prompt, note if scene.idx in redo else ""),
+                _steer(scene.image_prompt, _scene_note(ctx, "plates", scene.idx)),
                 len(anchors)))
             driver = drivers.for_scene(ctx.job, scene)
             template = None
@@ -975,7 +988,7 @@ def plates(ctx: StageContext) -> None:
             out_end = ctx.dir("plates") / f"scene_{scene.idx:02d}_end.png"
             anchors = ctx.job.anchors_for(scene, limit) if _anchoring(ctx) else []
             end_prompt = (_steer(scene.end_image_prompt,
-                                 note if scene.idx in redo else "")
+                                 _scene_note(ctx, "plates", scene.idx))
                           + MORPH_END_FRAME_RULE)
             result = _paid(ctx, scene, "image", model, end_prompt, out_end,
                            medias=[str(before)]
@@ -1104,7 +1117,7 @@ def clips(ctx: StageContext) -> None:
         while True:
             out = ctx.dir("clips") / f"scene_{scene.idx:02d}.mp4"
             prompt = _with_negatives(
-                ctx, _steer(scene.video_prompt, note if scene.idx in redo else ""))
+                ctx, _steer(scene.video_prompt, _scene_note(ctx, "clips", scene.idx)))
             shot_model = (drivers.engine_model(driver["engine"], model)
                           if driver else model)
             params = {"duration": scene.duration_s,

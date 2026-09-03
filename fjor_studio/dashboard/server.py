@@ -116,7 +116,8 @@ class Studio:
                 engine.approve(job, payload.get("note", ""))
             elif action == "revise":
                 engine.revise(job, payload["what"], payload.get("note", ""),
-                              payload.get("scenes") or None)
+                              payload.get("scenes") or None,
+                              payload.get("notes") or None)
             elif action == "retry":
                 engine.retry(job)
             elif action == "edit":
