@@ -24,8 +24,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..app import new_job, open_studio
 from ..engine.job import utcnow
-from ..assemble import list_music, list_packshots
+from ..assemble import list_music, list_packshots, music_for
 from .. import kit as kit_mod
+from .. import library as library_mod
+from ..library import LibraryError
 from ..kit import KitError
 from ..gen.base import GenError
 from ..qa import blocking_scenes
@@ -127,6 +129,11 @@ class Studio:
             elif action == "waive":
                 engine.waive(job, payload.get("scenes") or [],
                              (payload.get("note") or "").strip())
+            elif action == "prompt":
+                engine.set_prompt(job, int(payload.get("scene", -1)),
+                                  payload.get("fields") or {})
+            elif action == "reopen":
+                engine.reopen(job, (payload.get("note") or "").strip())
             elif action == "driver":
                 engine.drive(job, payload["source"], payload.get("scenes") or [],
                              payload.get("engine") or "seedance",
@@ -182,6 +189,7 @@ class Studio:
                 "ref_kind_default": str(((cfg.pipeline or {}).get("analysis")
                                          or {}).get("ref_kind", "ugc")),
                 "music": list_music(assets),
+                "library": library_mod.list_items(assets),
                 "formats": list(((cfg.pipeline or {}).get("delivery") or {})
                                 .get("formats", [])),
                 "providers": cfg.routing,
@@ -248,6 +256,9 @@ class Studio:
                         if s["idx"] not in {c["idx"] for c in cut_scenes(job)}],
             "music": current.get("music", ""),
             "music_library": list_music(assets),
+            "hook": current.get("hook", ""),
+            "insert": current.get("insert", ""),
+            "library": library_mod.list_items(assets),
             "subtitles": {"enabled": bool(subs.get("enabled", True)),
                           "style": subs.get("style", "bold-pop"),
                           "colour": subs.get("colour", subs.get("color", "yellow")),
@@ -463,6 +474,111 @@ class Studio:
                            count=1, flags=_re.M)[0]
         target.write_text(new)
         return self.delivery_status()
+
+    # -- verticals -----------------------------------------------------------
+    def add_vertical(self, form: Dict[str, Any]) -> Dict[str, Any]:
+        """Register a vertical from the dashboard: an id prefix and a delivery
+        folder, appended to config/verticals.yaml.
+
+        Appended as TEXT rather than re-dumped: the file carries the owner's
+        notes on why each prefix is what it is, and a dump would erase them.
+        The file is then re-read to prove the entry took, and the append is
+        undone if it did not -- a config that no longer parses would stop
+        every job, not only this one."""
+        cfg, _store, _engine = self.open()
+        # the same normalisation the page applies as the name is typed, so a
+        # name pasted straight into the API lands in the same shape
+        name = re.sub(r"[^a-z0-9]+", "_", str(form.get("name") or "").lower()).strip("_")
+        prefix = str(form.get("prefix") or "").strip().upper()
+        folder = str(form.get("folder") or "").strip()
+        if not re.match(r"^[a-z][a-z0-9_]{1,40}$", name):
+            raise ValueError("the name is lowercase letters, digits and underscores, "
+                             "like `strong_legs`")
+        if not re.match(r"^[A-Z]{1,5}$", prefix):
+            raise ValueError("the id prefix is 1-5 capital letters, like `SL` -- "
+                             "it opens every creative id (SL001)")
+        if not folder or len(folder) > 60 or "/" in folder or "\\" in folder \
+                or ".." in folder or folder.startswith("."):
+            raise ValueError("the delivery folder is a single folder name, like "
+                             "`STRONG LEGS` -- it is created under the delivery root")
+        existing = cfg.verticals.get("verticals") or {}
+        if name in existing:
+            raise ValueError(f"'{name}' is already a vertical")
+        for k, e in existing.items():
+            if str(e.get("prefix", "")).upper() == prefix:
+                raise ValueError(f"prefix {prefix} already belongs to {k} -- an id "
+                                 f"has to say which vertical it is for")
+            if str(e.get("folder", "")).strip().lower() == folder.lower():
+                raise ValueError(f"folder '{folder}' already belongs to {k}")
+        target = cfg.home / "config" / "verticals.yaml"
+        before = target.read_text(encoding="utf-8") if target.exists() else "verticals:\n"
+        if "verticals:" not in before:
+            before = before.rstrip("\n") + "\nverticals:\n"
+        folder_yaml = json.dumps(folder, ensure_ascii=False)
+        line = (f"  # Added from the dashboard {time.strftime('%Y-%m-%d')}.\n"
+                f"  {name}: {{prefix: {json.dumps(prefix)}, folder: {folder_yaml}}}\n")
+        after = before if before.endswith("\n") else before + "\n"
+        target.write_text(after + line, encoding="utf-8")
+        try:
+            check = self.open()[0].verticals.get("verticals") or {}
+            entry = check.get(name)
+            if not entry or str(entry.get("prefix")) != prefix \
+                    or str(entry.get("folder")) != folder:
+                raise ValueError("the entry did not read back as written")
+        except Exception as exc:  # noqa: BLE001
+            target.write_text(before, encoding="utf-8")
+            raise ValueError(f"could not add the vertical: {exc}")
+        return {"name": name, "prefix": prefix, "folder": folder}
+
+    # -- the clip library ----------------------------------------------------
+    def library_items(self) -> Dict[str, Any]:
+        cfg, _store, _engine = self.open()
+        return {"items": library_mod.list_items(cfg.assets_dir)}
+
+    def library_add(self, form: Dict[str, Any]) -> Dict[str, Any]:
+        """An upload (already staged by /api/uploads) into the library."""
+        cfg, _store, _engine = self.open()
+        src = Path(str(form.get("path") or ""))
+        staged = (cfg.home / "uploads").resolve()
+        if not src.is_file() or not str(src.resolve()).startswith(str(staged) + os.sep):
+            raise ValueError("drop the clip first -- only a staged upload goes in")
+        item = library_mod.add_upload(cfg.assets_dir, src,
+                                      str(form.get("name") or src.stem))
+        # the upload's own directory is empty now that its file has moved
+        try:
+            src.parent.rmdir()
+        except OSError:
+            pass
+        return item
+
+    def library_remove(self, item_id: str) -> Dict[str, Any]:
+        cfg, _store, _engine = self.open()
+        return library_mod.remove(cfg.assets_dir, item_id)
+
+    def keep_clip(self, job_id: str, form: Dict[str, Any]) -> Dict[str, Any]:
+        cfg, store, _engine = self.open()
+        job = store.load(job_id)
+        return library_mod.keep_generation(
+            cfg.assets_dir, job, store.job_dir(job.id),
+            int(form.get("scene", -1)), str(form.get("name") or ""))
+
+    def library_path(self, item_id: str) -> Path:
+        cfg, _store, _engine = self.open()
+        path = library_mod.item_path(cfg.assets_dir, item_id)
+        if path is None:
+            raise FileNotFoundError(item_id)
+        return path
+
+    def music_path(self, name: str) -> Path:
+        """A bed, by the name the picker shows. Resolved through the library
+        listing, so only a file the picker would offer is ever served."""
+        cfg, _store, _engine = self.open()
+        if ".." in str(name):
+            raise ValueError("bad bed name")
+        path = music_for(cfg.assets_dir, name)
+        if path is None:
+            raise FileNotFoundError(name)
+        return path
 
     def receive_upload(self, filename: str, stream, length: int) -> Dict[str, Any]:
         """Take a dropped file and put it somewhere a job can reference.
@@ -883,9 +999,17 @@ def make_handler(studio: Studio, token: str = ""):
                     return self._json(studio.detail(m.group(1)))
                 if path == "/api/dubs":
                     return self._json({"dubs": studio.dubs()})
+                if path == "/api/library":
+                    return self._json(studio.library_items())
                 m = re.match(r"^/media/([A-Za-z0-9]+)/(.+)$", path)
                 if m:
                     return self._serve_media(m.group(1), m.group(2))
+                m = re.match(r"^/library/([a-z0-9_-]+)$", path)
+                if m:
+                    return self._serve_ranged(studio.library_path(m.group(1)))
+                m = re.match(r"^/music/(.+)$", path)
+                if m:
+                    return self._serve_ranged(studio.music_path(m.group(1)))
                 m = re.match(r"^/dubmedia/([A-Za-z0-9]+)/(.+)$", path)
                 if m:
                     return self._serve_file(
@@ -911,14 +1035,17 @@ def make_handler(studio: Studio, token: str = ""):
                 self.wfile.write(body)
 
         def _serve_media(self, job_id: str, rel: str) -> None:
-            """Serves byte ranges, which is not optional for video.
+            return self._serve_ranged(studio.media_path(job_id, rel))
+
+        def _serve_ranged(self, path: Path) -> None:
+            """Serves byte ranges, which is not optional for video -- or for a
+            bed the producer scrubs through to hear the chorus.
 
             A response that declares `Accept-Ranges: none` is one Chrome will
             not seek, even after it has buffered the whole file -- the draft
             player could be watched start to finish and nothing else, which is
             useless at a gate whose job is reviewing the cut. Streamed in
             chunks too, so a 30 MB final is not read into memory to be sent."""
-            path = studio.media_path(job_id, rel)
             size = path.stat().st_size
             ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
             rng = parse_range(self.headers.get("Range"), size)
@@ -967,7 +1094,9 @@ def make_handler(studio: Studio, token: str = ""):
             how big a file is."""
             path = posixpath.normpath(
                 urllib.parse.unquote(urllib.parse.urlparse(self.path).path))
-            if re.match(r"^/media/[A-Za-z0-9]+/.+$", path):
+            if re.match(r"^/media/[A-Za-z0-9]+/.+$", path) \
+                    or re.match(r"^/library/[a-z0-9_-]+$", path) \
+                    or re.match(r"^/music/.+$", path):
                 return self.do_GET()
             self.send_response(405)
             self.send_header("Allow", "GET, POST")
@@ -1001,6 +1130,16 @@ def make_handler(studio: Studio, token: str = ""):
                     return self._json(studio.receive_upload(
                         self.headers.get("X-Filename", ""), self.rfile,
                         int(self.headers.get("Content-Length") or 0)))
+                if path == "/api/verticals":
+                    return self._json(studio.add_vertical(payload))
+                if path == "/api/library":
+                    return self._json(studio.library_add(payload))
+                m = re.match(r"^/api/library/([a-z0-9_-]+)/delete$", path)
+                if m:
+                    return self._json(studio.library_remove(m.group(1)))
+                m = re.match(r"^/api/jobs/([A-Za-z0-9]+)/keep$", path)
+                if m:
+                    return self._json(studio.keep_clip(m.group(1), payload))
                 if path == "/api/jobs":
                     job_id = studio.create(payload)
                     if payload.get("run"):
@@ -1020,15 +1159,17 @@ def make_handler(studio: Studio, token: str = ""):
                     job_id, action = m.group(1), m.group(2)
                     if action not in ("run", "approve", "revise", "retry",
                                       "reassemble", "cancel", "edit", "driver",
-                                      "waive"):
+                                      "waive", "prompt", "reopen"):
                         return self._json({"error": f"unknown action {action}"}, 400)
                     studio.worker.submit(job_id, action, payload)
                     return self._json({"queued": action, "id": job_id})
                 self._json({"error": "not found"}, 404)
             except UnknownVertical as exc:
                 self._json({"error": str(exc)}, 400)
+            except FileNotFoundError as exc:
+                self._json({"error": str(exc)}, 404)
             except (TransitionError, DeriveError, KitError, GenError,
-                    ValueError, KeyError) as exc:
+                    LibraryError, ValueError, KeyError) as exc:
                 # a refusal is the answer, not a crash: the page shows it, and
                 # "Internal Server Error" would tell the producer nothing
                 self._json({"error": f"{type(exc).__name__}: {exc}"}, 400)

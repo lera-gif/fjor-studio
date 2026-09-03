@@ -158,12 +158,22 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
 .opt:hover{border-color:var(--faint)}
 .opt.sel{border-color:var(--accent);background:#15150e}
 .opt .price{float:right;font-variant-numeric:tabular-nums}
+.lib{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.lib .scene .media{aspect-ratio:9/16}
+.scene .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.scene .acts button{padding:3px 8px;font-size:11px}
+textarea.prompt-edit{font:12px/1.5 ui-monospace,Menlo,monospace;min-height:84px;
+  color:var(--ink);background:#0b0d10}
+.bedplay{padding:5px 9px;font-size:12px;white-space:nowrap}
+.bedplay.on{border-color:var(--accent);color:var(--accent)}
 </style></head><body>
 <div class="layout">
   <aside class="side">
     <div class="brand"><h1>FJOR Studio</h1>
       <button id="newBtn" class="primary" style="padding:5px 11px">New</button>
-      <button id="dubBtn" style="padding:5px 11px;margin-left:6px">Dub</button></div>
+      <button id="dubBtn" style="padding:5px 11px;margin-left:6px">Dub</button>
+      <button id="libBtn" style="padding:5px 11px;margin-left:6px" title="your own hooks and inserts, and shots kept from jobs">Library</button></div>
+<audio id="bedAudio" preload="none"></audio>
 <div id="setupBar"></div>
 <div id="kitBar"></div>
 <input type="file" id="kitInput" accept="application/json,.json" style="display:none">
@@ -235,6 +245,22 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
          step="0.1" placeholder="config default"></div>
   </div>
   <div class="hint" id="vertWarn" style="margin-top:6px;min-height:14px"></div>
+  <div id="newVert" style="display:none;margin-top:6px;padding:12px;border:1px dashed var(--line);border-radius:9px">
+    <div class="hint" style="margin-bottom:8px">A vertical is an id prefix and a delivery
+      folder. The prefix opens every creative id (<b>MENY</b>072); the folder is where
+      finals land under the delivery root, and is created on the first delivery.
+      It gets no house lore until someone writes it.</div>
+    <div id="nvErr"></div>
+    <div class="formgrid">
+      <div><label>Name</label><input id="nv_name" spellcheck="false" placeholder="strong_legs"></div>
+      <div><label>Id prefix</label><input id="nv_prefix" spellcheck="false" placeholder="SL" style="text-transform:uppercase"></div>
+      <div><label>Delivery folder</label><input id="nv_folder" spellcheck="false" placeholder="STRONG LEGS"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button type="button" class="primary" id="nv_add">Add vertical</button>
+      <button type="button" id="nv_cancel">Never mind</button>
+    </div>
+  </div>
   <div style="margin-top:6px"><label>Brief — anything the pipeline should know<span
       id="briefBanner" style="display:none;text-transform:none;letter-spacing:0"> ·
       for a re-formatted banner this is where visual changes go</span></label>
@@ -301,7 +327,8 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
     <div id="devFrom"></div></div>
   <div class="formgrid" style="margin-top:6px">
     <div><label>Packshot</label><select id="devPackshot"></select></div>
-    <div><label>Music bed</label><select id="devMusic"></select></div>
+    <div><label>Music bed</label><div class="row" style="gap:6px;flex-wrap:nowrap">
+      <select id="devMusic"></select><span id="devBed"></span></div></div>
     <div><label>Crossfade (s)</label><input id="devXfade" type="number" step="0.1"
       placeholder="same as parent"></div>
   </div>
@@ -387,6 +414,26 @@ video.final{width:100%;border-radius:10px;background:#000;display:block}
   <div class="row end" style="margin-top:18px">
     <button type="button" onclick="drvDlg.close()">Cancel</button>
     <button type="button" class="primary" id="drvGo">Attach</button>
+  </div>
+</form></dialog>
+
+<dialog id="libDlg" style="max-width:900px;max-height:92vh;overflow:auto"><form method="dialog">
+  <h3 style="margin:0 0 4px">Clip library</h3>
+  <div class="hint" style="margin-bottom:14px">Your own clips &mdash; a hook that has
+    already performed, a product placement with the app or the table &mdash; and shots
+    kept from jobs. At a gate, the editor can open a cut with one (<b>hook</b>, keeps its
+    sound and is subtitled) or place one before the packshot (<b>insert</b>, muted under
+    the bed).</div>
+  <div id="libErr"></div>
+  <div class="drop" id="libDrop" style="padding:16px">
+    <div class="big">Drop a clip to add it</div>
+    <div class="hint">or click to choose &middot; mp4 or mov &middot; it is normalised to the frame when cut, never re-generated</div>
+    <div class="bar" id="libBar" style="display:none"><i></i></div>
+  </div>
+  <input type="file" id="libInput" accept="video/*" style="display:none">
+  <div id="libList" style="margin-top:16px"></div>
+  <div class="row end" style="margin-top:18px">
+    <button type="button" onclick="libDlg.close()">Close</button>
   </div>
 </form></dialog>
 
@@ -586,7 +633,34 @@ function sceneCard(s,kind){
       <div class="prompt">${esc((prompt||'').slice(0,150))}</div>
       ${qa&&qa.issues&&qa.issues.length?`<div class="prompt" style="color:var(--warn)">
         ${qa.issues.map(i=>esc(i)).join(' · ')}</div>`:''}
+      ${sceneActs(s,kind)}
     </div></div>`;
+}
+// What can be done to THIS shot from its card. Regenerating is the revise
+// dialog, prefilled -- it was always possible at a gate, but "Revise… > clip"
+// is not where anyone looks for a bad shot. Keeping copies the clip into the
+// library with the prompts that made it.
+function sceneActs(s,kind){
+  const d=DETAIL, atGate=STATE.gates.includes(d.state), busy=d.busy;
+  const target=kind==='clip'?'clips':'plates';
+  const can=atGate&&(d.revisable||[]).some(w=>(REV_ALIAS[w]||w)===target);
+  const has=kind==='clip'?s.clip:s.plate;
+  let html='';
+  if(can&&has) html+=`<button ${busy?'disabled':''} onclick="openRevise('${target}',${s.idx})"
+    title="buy this ${kind==='clip'?'animation':'still'} again, with a note">Regenerate…</button>`;
+  if(kind==='clip'&&s.clip) html+=`<button ${busy?'disabled':''} onclick="keepClip(${s.idx})"
+    title="copy this shot into the library to reuse in another creative">Keep in library</button>`;
+  return html?`<div class="acts">${html}</div>`:'';
+}
+async function keepClip(idx){
+  const name=prompt('Name this shot for the library',`${CUR} scene ${idx}`);
+  if(name===null) return;
+  try{
+    const r=await api(`/api/jobs/${CUR}/keep`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:idx,name})});
+    LAST_RENDER=null; await refresh();
+    alert(`Kept as "${r.name}". It is in the Library now.`);
+  }catch(e){ alert(e.message); }
 }
 // The producer's edit, held locally between renders: the page polls every few
 // seconds and a select that resets itself mid-decision is unusable. Re-seeded
@@ -600,9 +674,39 @@ function editState(d){
 }
 function editDirty(d){
   const a=editState(d), b=d.edit||{};
-  return JSON.stringify([a.order,a.music,a.subtitles])!==
-         JSON.stringify([b.order,b.music,b.subtitles]);
+  return JSON.stringify([a.order,a.music,a.subtitles,a.hook||'',a.insert||''])!==
+         JSON.stringify([b.order,b.music,b.subtitles,b.hook||'',b.insert||'']);
 }
+// A library clip picker. The library is small and named by the producer, so a
+// flat list is fine; a missing file is shown and disabled rather than hidden,
+// because a cut that names it must say why it cannot be made.
+function libSelect(items,current,on,busy,firstLabel){
+  const opts=(items||[]).map(i=>`<option value="${esc(i.id)}" ${i.id===current?'selected':''}
+    ${i.missing?'disabled':''}>${esc(i.name)}${i.duration_s?' · '+i.duration_s+'s':''}${i.missing?' (file missing)':''}</option>`).join('');
+  return `<select ${busy?'disabled':''} onchange="${on}">
+    <option value="" ${current?'':'selected'}>${firstLabel}</option>${opts}</select>`;
+}
+// Hearing a bed before choosing it. One <audio> for the whole page; the button
+// on the bed currently playing is the one that stops it.
+let BED_PLAYING='';
+function bedButton(name){
+  const on=name&&BED_PLAYING===name;
+  return `<button type="button" class="bedplay ${on?'on':''}" ${name?'':'disabled'}
+    onclick="toggleBed(${JSON.stringify(name).replace(/"/g,'&quot;')})"
+    title="${name?(on?'stop':'listen to this bed'):'pick a bed to listen to it'}">${on?'■ stop':'▶ listen'}</button>`;
+}
+function toggleBed(name){
+  const a=$('#bedAudio');
+  if(!name||BED_PLAYING===name){ a.pause(); a.removeAttribute('src'); BED_PLAYING=''; }
+  else{ a.src='/music/'+encodeURIComponent(name).replace(/%2F/g,'/'); a.currentTime=0;
+        a.play().catch(e=>alert('Could not play that bed: '+e.message)); BED_PLAYING=name; }
+  document.querySelectorAll('.bedplay').forEach(b=>{
+    const n=b.getAttribute('onclick').match(/toggleBed\((.*)\)$/);
+    const mine=n&&JSON.parse(n[1].replace(/&quot;/g,'"'))===BED_PLAYING;
+    b.classList.toggle('on',!!mine); b.textContent=mine?'■ stop':'▶ listen';
+  });
+}
+$('#bedAudio').addEventListener('ended',()=>toggleBed(BED_PLAYING));
 function moveShot(idx,dir){
   const o=EDIT.order, i=o.indexOf(idx), j=i+dir;
   if(i<0||j<0||j>=o.length) return;
@@ -730,7 +834,8 @@ function setSubs(k,v){ EDIT.subtitles={...EDIT.subtitles,[k]:v}; renderMain(); }
 function resetEdit(){ EDIT=null; EDIT_KEY=null; renderMain(); }
 async function applyEdit(){
   const d=DETAIL, recut=d.state==='GATE_DRAFT';
-  await act('edit',{edit:{order:EDIT.order,music:EDIT.music,subtitles:EDIT.subtitles},
+  await act('edit',{edit:{order:EDIT.order,music:EDIT.music,subtitles:EDIT.subtitles,
+                          hook:EDIT.hook||'',insert:EDIT.insert||''},
                     recut:recut});
 }
 // The bed library is filed by mood, and its names carry the folder. A flat list
@@ -802,10 +907,15 @@ function editorCard(d){
       ${out.map(i=>chip(i,-1)).join('')}</div>
     <div class="row" style="gap:18px">
       <div><label>Music bed</label>
-        <select ${busy?'disabled':''} onchange="setEdit('music',this.value)">
+        <div class="row" style="gap:6px;flex-wrap:nowrap">
+        <select id="edMusic" ${busy?'disabled':''} onchange="setEdit('music',this.value)">
           ${musicOptions(e.music_library, e.music||'',
             `<option value="" ${e.music?'':'selected'}>— none —</option>`)}
-        </select></div>
+        </select>${bedButton(e.music||'')}</div></div>
+      <div><label>Opening hook</label>
+        ${libSelect(e.library,e.hook||'','setEdit(\'hook\',this.value)',busy,'— none —')}</div>
+      <div><label>Product insert — before the packshot</label>
+        ${libSelect(e.library,e.insert||'','setEdit(\'insert\',this.value)',busy,'— none —')}</div>
       <div><label>Subtitles</label>
         ${sel(subs.enabled?'on':'off',[['on','burned in'],['off','none']],
               'setSubs(\'enabled\',this.value===\'on\')')}</div>
@@ -957,6 +1067,9 @@ function renderMain(){
     html+=`<button ${busy?'disabled':''} onclick="act('reassemble')">Re-cut (free)</button>`;
   if((d.derive||[]).length)
     html+=`<button ${busy?'disabled':''} onclick="openDerive()">Make a variation…</button>`;
+  if(d.state==='done'&&d.scenes.length&&d.scenes.every(s=>s.clip))
+    html+=`<button ${busy?'disabled':''} onclick="reopenCut()"
+      title="back to the cut, to regenerate a shot or change the edit under the same creative id">Reopen the cut…</button>`;
   if(!STATE.terminal.includes(d.state)||d.state==='failed')
     html+=`<button class="danger" ${busy?'disabled':''} onclick="act('cancel')">Cancel</button>`;
   html+=`<button class="danger" ${busy?'disabled':''} onclick="deleteJob()">Delete…</button>`;
@@ -1030,14 +1143,7 @@ function renderMain(){
     <pre style="white-space:pre-wrap;font:12px/1.55 ui-monospace,Menlo,monospace;
       color:var(--dim);margin:10px 0 0;max-height:340px;overflow:auto">${esc(d.analysis)}</pre>
     </details></div>`;
-  if(d.scenes.length&&d.scenes[0].video_prompt) html+=`<div class="card"><h3>Prompts</h3>
-    <details><summary class="muted" style="cursor:pointer;font-size:12px">
-      the ${d.scenes.length} scene prompts as written</summary>
-    ${d.scenes.map(s=>`<div style="margin-top:12px;padding-top:10px;
-      border-top:1px solid var(--line)"><b>scene ${s.idx}</b> · ${s.duration_s}s
-      <div class="muted" style="font-size:12px;margin-top:5px"><b>plate:</b> ${esc(s.image_prompt)}</div>
-      <div class="muted" style="font-size:12px;margin-top:5px"><b>motion:</b> ${esc(s.video_prompt)}</div>
-      </div>`).join('')}</details></div>`;
+  if(d.scenes.length&&d.scenes[0].video_prompt) html+=promptsCard(d,atGate);
   html+=`<div class="card"><h3>Events</h3><div class="log">
     ${d.events.map(e=>`<div><b>${esc(e.type)}</b> ${esc(e.msg||'')}</div>`).join('')}</div></div>`;
   const openCards=[...document.querySelectorAll('.card details[open]')]
@@ -1050,6 +1156,52 @@ function renderMain(){
     if(openCards.includes(x.closest('.card').querySelector('h3').textContent))
       x.open=true;
   });
+}
+
+// The prompts, editable at a gate. What is shown is the stored core -- the
+// negatives, the identity anchor and a driver's rule are added by code at
+// generation time and are not the producer's to edit. Saving changes the words
+// only; the shot already bought stays until it is regenerated from them.
+const PROMPT_DRAFT={};
+function promptDraft(key,v){ PROMPT_DRAFT[key]=v; const b=document.getElementById('ps_'+key); if(b) b.disabled=false; }
+function promptsCard(d,atGate){
+  const busy=d.busy;
+  const canPlate=atGate&&(d.revisable||[]).some(w=>(REV_ALIAS[w]||w)==='plates');
+  const canClip=atGate&&(d.revisable||[]).some(w=>(REV_ALIAS[w]||w)==='clips');
+  const field=(s,name,label)=>{
+    const key=`${d.id}|${s.idx}|${name}`, cur=s[name]||'';
+    const val=key in PROMPT_DRAFT?PROMPT_DRAFT[key]:cur;
+    if(!atGate) return `<div class="muted" style="font-size:12px;margin-top:5px"><b>${label}:</b> ${esc(cur)}</div>`;
+    const target=name==='video_prompt'?'clips':'plates';
+    const regen=(target==='clips'?canClip:canPlate)&&(target==='clips'?s.clip:s.plate);
+    return `<div style="margin-top:8px"><label>${label}</label>
+      <textarea class="prompt-edit" ${busy?'disabled':''} oninput="promptDraft('${key}',this.value)">${esc(val)}</textarea>
+      <div class="row" style="margin-top:6px">
+        <button id="ps_${key}" ${busy||val===cur?'disabled':''} onclick="savePrompt(${s.idx},'${name}','${key}')">Save</button>
+        ${regen?`<button ${busy?'disabled':''} onclick="openRevise('${target}',${s.idx})">Regenerate ${target==='clips'?'clip':'plate'} from it…</button>`:''}
+        ${val!==cur?'<span class="muted" style="font-size:11px">unsaved</span>':''}
+      </div></div>`;
+  };
+  return `<div class="card"><h3>Prompts${atGate?' — edit by hand at this gate':''}</h3>
+    <details><summary class="muted" style="cursor:pointer;font-size:12px">
+      the ${d.scenes.length} scene prompts as written${atGate?' · save, then regenerate the shot to use the new words':''}</summary>
+    ${d.scenes.map(s=>`<div style="margin-top:12px;padding-top:10px;
+      border-top:1px solid var(--line)"><b>scene ${s.idx}</b> · ${s.duration_s}s
+      ${field(s,'image_prompt','plate')}
+      ${s.end_image_prompt?field(s,'end_image_prompt','end frame'):''}
+      ${field(s,'video_prompt','motion')}
+      </div>`).join('')}</details></div>`;
+}
+async function savePrompt(idx,name,key){
+  const text=PROMPT_DRAFT[key];
+  if(text==null) return;
+  const fields={}; fields[name]=text;
+  try{
+    await api(`/api/jobs/${CUR}/prompt`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:idx,fields})});
+    delete PROMPT_DRAFT[key];
+    LAST_RENDER=null; await refresh();
+  }catch(e){ alert(e.message); }
 }
 
 // The one <video> the producer actually watches. Created once per source and
@@ -1084,6 +1236,11 @@ async function deleteJob(){
   }catch(e){ alert(e.message); }
 }
 
+async function reopenCut(){
+  if(!confirm(`Reopen ${CUR} at GATE_DRAFT?\n\nNothing is bought by reopening. `
+    +`When you approve it again the delivered files are replaced — the old ones go to _to_delete, never deleted.`)) return;
+  await act('reopen');
+}
 async function act(action,payload){
   try{ await api(`/api/jobs/${CUR}/${action}`,{method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -1105,6 +1262,8 @@ function openDerive(){
     +o.packshots.map(p=>`<option>${esc(p)}</option>`).join('');
   $('#devMusic').innerHTML=musicOptions(o.music, '',
     '<option value="">same as parent</option><option value="none">no music</option>');
+  const devBed=()=>{ const v=$('#devMusic').value; $('#devBed').innerHTML=bedButton(v==='none'?'':v); };
+  $('#devMusic').onchange=devBed; devBed();
   $('#devXfade').value=''; $('#devNote').value='';
   $('#devRecast').value=''; $('#devCastDesc').value='';
   $('#devRecast').onchange=()=>{
@@ -1420,14 +1579,27 @@ $('#drvGo').onclick=async()=>{
   }catch(e){ $('#drvErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 };
 
-function openRevise(){
+// `what` and `scene` prefill it: the Regenerate button on a card opens this
+// with the shot already ticked and the right target chosen, so the producer
+// does not have to know that "plates" is the word for a still.
+const REV_LABELS={plates:'the still (plates) — the clip is animated from it, so a fault in the picture is fixed here',
+  clips:'the animation (clips) — the same still, new motion',
+  prompts:'the script (prompts) — every prompt is rewritten',
+  analysis:'the reference analysis — everything after it is redone',
+  voice:'the spoken lines (voiceovers)',
+  assembly:'the cut — order, captions, music; ffmpeg only'};
+const REV_ALIAS={plate:'plates',photos:'plates',clip:'clips',animation:'clips',motion:'clips',
+  script:'prompts',copy:'prompts',plan:'analysis',vo:'voice',draft:'assembly',
+  captions:'assembly',subtitles:'assembly',music:'assembly'};
+function openRevise(what,scene){
   const d=DETAIL;
   $('#revHint').textContent=`At ${d.state}. Anything you send back re-runs forward and stops here again.`;
-  $('#revWhat').innerHTML=d.revisable.map(w=>`<option>${esc(w)}</option>`).join('');
+  const targets=[...new Set(d.revisable.map(w=>REV_ALIAS[w]||w))];
+  $('#revWhat').innerHTML=targets.map(w=>`<option value="${esc(w)}" ${w===what?'selected':''}>${esc(REV_LABELS[w]||w)}</option>`).join('');
   $('#revScenes').innerHTML=d.scenes.map(s=>
     `<label style="display:flex;gap:5px;align-items:center;text-transform:none;
       letter-spacing:0;font-size:13px;color:var(--ink);width:auto">
-      <input type="checkbox" value="${s.idx}" style="width:auto"> ${s.idx}</label>`).join('');
+      <input type="checkbox" value="${s.idx}" style="width:auto" ${s.idx===scene?'checked':''}> ${s.idx}</label>`).join('');
   $('#revNote').value='';
   revDlg.showModal();
 }
@@ -1591,8 +1763,9 @@ $('#newBtn').onclick=()=>{
   // contains still existed in the DOM, which made it look like it had.
   newDlg.showModal();
   const o=STATE.options;
-  $('#f_vertical').innerHTML=o.verticals.map(v=>`<option>${esc(v)}</option>`).join('');
+  fillVerticals(o.verticals,'');
   VERTICAL_TOUCHED=false;
+  $('#newVert').style.display='none'; $('#nvErr').innerHTML='';
   $('#f_packshot').innerHTML='<option value="">none</option>'+o.packshots.map(p=>`<option${p==='formula'?' selected':''}>${esc(p)}</option>`).join('');
   const RK={ugc:'UGC with people — we re-create the idea, not the frame',
             replica:'Match the reference — reproduce its material, composition and finish 1:1'};
@@ -1616,7 +1789,52 @@ function refKindNote(){
 }
 $('#f_refkind').addEventListener('change',refKindNote);
 $('#f_name').addEventListener('input',readName);
-$('#f_vertical').addEventListener('change',()=>{ VERTICAL_TOUCHED=true; readName(); });
+const NEW_VERT='__new__';
+function fillVerticals(list,selected){
+  $('#f_vertical').innerHTML=list.map(v=>`<option ${v===selected?'selected':''}>${esc(v)}</option>`).join('')
+    +`<option value="${NEW_VERT}">+ Add a vertical…</option>`;
+}
+// The list is what verticals.yaml registers. A niche that is not there yet is
+// added HERE, with the two things the pipeline needs to place a creative --
+// the id prefix and the delivery folder -- rather than by editing config.
+$('#f_vertical').addEventListener('change',()=>{
+  if($('#f_vertical').value===NEW_VERT){
+    $('#newVert').style.display='block';
+    $('#nv_name').value=''; $('#nv_prefix').value=''; $('#nv_folder').value='';
+    // a fresh block suggests again: a prefix typed by hand for a previous
+    // attempt must not silence the suggestion for this one
+    delete $('#nv_folder').dataset.touched; delete $('#nv_prefix').dataset.touched;
+    $('#nvErr').innerHTML=''; setTimeout(()=>$('#nv_name').focus(),30);
+    return;
+  }
+  VERTICAL_TOUCHED=true; readName(); });
+$('#nv_name').addEventListener('input',()=>{
+  // a folder and a prefix suggested from the name, both still editable
+  const n=$('#nv_name').value.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  if($('#nv_name').value!==n) $('#nv_name').value=n;
+  if(!$('#nv_folder').dataset.touched) $('#nv_folder').value=n.replace(/_/g,' ').toUpperCase();
+  if(!$('#nv_prefix').dataset.touched) $('#nv_prefix').value=n.split('_').map(w=>w[0]||'').join('').toUpperCase().slice(0,5);
+});
+$('#nv_folder').addEventListener('input',()=>{ $('#nv_folder').dataset.touched='1'; });
+$('#nv_prefix').addEventListener('input',()=>{ $('#nv_prefix').dataset.touched='1';
+  $('#nv_prefix').value=$('#nv_prefix').value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,5); });
+$('#nv_cancel').onclick=()=>{
+  $('#newVert').style.display='none';
+  fillVerticals(STATE.options.verticals,STATE.options.verticals[0]||''); readName(); };
+$('#nv_add').onclick=async()=>{
+  const body={name:$('#nv_name').value.trim(),prefix:$('#nv_prefix').value.trim(),
+              folder:$('#nv_folder').value.trim()};
+  try{
+    const r=await api('/api/verticals',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    STATE=await api('/api/state');
+    fillVerticals(STATE.options.verticals,r.name);
+    VERTICAL_TOUCHED=true;
+    $('#newVert').style.display='none';
+    delete $('#nv_folder').dataset.touched; delete $('#nv_prefix').dataset.touched;
+    readName();
+  }catch(e){ $('#nvErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+};
 $('#createBtn').onclick=async()=>{
   if(!readName()){
     $('#newErr').innerHTML='<div class="err">Paste the full creative name — it carries '
@@ -1644,6 +1862,67 @@ $('#createBtn').onclick=async()=>{
     newDlg.close(); await refresh(); select(r.id);
   }catch(e){ $('#newErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 };
+// -- the clip library --------------------------------------------------------
+let LIB=[];
+async function openLibrary(){
+  libDlg.showModal(); $('#libErr').innerHTML='';
+  await renderLibrary();
+}
+async function renderLibrary(){
+  try{ LIB=(await api('/api/library')).items||[]; }
+  catch(e){ $('#libErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; return; }
+  $('#libList').innerHTML = LIB.length ? `<div class="grid lib">${LIB.map(i=>`
+    <div class="scene"><div class="media">${i.missing?'<span class="muted">file missing</span>'
+      :`<video src="/library/${esc(i.id)}" muted preload="metadata"
+        onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>`}</div>
+      <div class="meta"><b>${esc(i.name)}</b>
+        <div class="muted" style="font-size:11px;margin-top:3px">
+          ${i.duration_s?i.duration_s+'s · ':''}${i.kind==='generated'
+            ?`kept from <a href="#" onclick="libDlg.close();select('${esc(i.from_job)}');return false">${esc(i.from_job)}</a> scene ${i.scene}`
+            :'your upload'}${i.has_audio===false?' · silent':''}</div>
+        ${i.video_prompt?`<div class="prompt" title="${esc(i.video_prompt)}">${esc(i.video_prompt.slice(0,120))}</div>`:''}
+        <div class="acts"><button class="danger" onclick="removeLib('${esc(i.id)}')">Remove</button></div>
+      </div></div>`).join('')}</div>`
+    : '<div class="empty">Nothing in the library yet. Drop a clip above, or use "Keep in library" on a shot.</div>';
+}
+async function removeLib(id){
+  const it=LIB.find(x=>x.id===id)||{};
+  if(!confirm(`Remove "${it.name||id}" from the library?\n\nIt is moved to _to_delete, not deleted. A cut that names it will refuse to re-cut until another is picked.`)) return;
+  try{ await api(`/api/library/${id}/delete`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:'{}'}); await renderLibrary(); }
+  catch(e){ $('#libErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+function uploadLib(file){
+  if(!file) return;
+  const name=prompt('Name this clip',file.name.replace(/\.[^.]+$/,''));
+  if(name===null) return;
+  const bar=$('#libBar'); bar.style.display='block'; bar.firstElementChild.style.width='0';
+  $('#libErr').innerHTML='';
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST','/api/uploads');
+  xhr.setRequestHeader('X-Filename',file.name);
+  xhr.upload.onprogress=e=>{ if(e.lengthComputable) bar.firstElementChild.style.width=(100*e.loaded/e.total)+'%'; };
+  xhr.onload=async()=>{
+    bar.style.display='none';
+    let r={}; try{ r=JSON.parse(xhr.responseText); }catch(_){}
+    if(xhr.status>=300||r.error){ $('#libErr').innerHTML=`<div class="err">${esc(r.error||('HTTP '+xhr.status))}</div>`; return; }
+    try{ await api('/api/library',{method:'POST',headers:{'Content-Type':'application/json'},
+           body:JSON.stringify({path:r.path,name})}); await renderLibrary(); }
+    catch(e){ $('#libErr').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+  };
+  xhr.onerror=()=>{ bar.style.display='none'; $('#libErr').innerHTML='<div class="err">upload failed</div>'; };
+  xhr.send(file);
+}
+(function(){
+  const d=$('#libDrop'), input=$('#libInput');
+  d.onclick=()=>input.click();
+  input.onchange=()=>{ uploadLib(input.files[0]); input.value=''; };
+  ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('over');}));
+  d.addEventListener('drop',e=>uploadLib(e.dataTransfer.files[0]));
+})();
+$('#libBtn').onclick=openLibrary;
+
 refresh(); TIMER=setInterval(refresh,4000);
 </script></body></html>
 """

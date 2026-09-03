@@ -1306,6 +1306,7 @@ def _edit_signature(ctx: StageContext, inputs: Dict[str, Any]) -> str:
     parts += [f"xfade={inputs.get('crossfade_s')}",
               f"intopack={inputs.get('crossfade_into_packshot')}",
               f"demo={inputs.get('demo')}", f"trim={inputs.get('demo_trim_s')}",
+              f"hook={inputs.get('hook')}",
               f"packshot={ctx.job.intake.get('packshot')}"]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
@@ -1349,13 +1350,31 @@ def _assembly_inputs(ctx: StageContext, size):
         from ..assemble import list_packshots
         raise GenError(f"assembly: no packshot named '{name}' in {assets/'packshots'} "
                        f"(have: {', '.join(list_packshots(assets)) or 'none'})")
-    demo_name = intake.get("demo")
+    edit_now = edit_of(ctx.job)
+    # The product insert: a library clip chosen at a gate, or the CLI's --demo
+    # from assets/demos when the edit has not spoken. The hook only ever comes
+    # from the library -- it did not exist before the editor did.
+    from .. import library as library_mod
     demo = None
-    if demo_name:
+    insert_id = edit_now.get("insert")
+    if insert_id:
+        demo = library_mod.item_path(assets, insert_id)
+        if demo is None:
+            raise GenError(f"assembly: the product insert '{insert_id}' is not "
+                           f"in the library any more -- pick another at the gate")
+    elif intake.get("demo"):
+        demo_name = intake.get("demo")
         matches = sorted((assets / "demos").glob(f"{demo_name}.*"))
         if not matches:
             raise GenError(f"assembly: no demo named '{demo_name}'")
         demo = matches[0]
+    hook = None
+    hook_id = edit_now.get("hook")
+    if hook_id:
+        hook = library_mod.item_path(assets, hook_id)
+        if hook is None:
+            raise GenError(f"assembly: the opening hook '{hook_id}' is not in "
+                           f"the library any more -- pick another at the gate")
     encode = (ctx.config.delivery.get("export") or {})
     style, subs_on = _subtitle_settings(ctx)
     edit = (ctx.config.pipeline or {}).get("edit") or {}
@@ -1377,6 +1396,7 @@ def _assembly_inputs(ctx: StageContext, size):
         "music_duck": bool(edit.get("music_duck", True)),
         "packshot": packshot,
         "demo": demo,
+        "hook": hook,
         "text_card": ((ctx.job_dir / ctx.job.meta["text_card"])
                       if ctx.job.meta.get("text_card") else None),
         "demo_trim_s": intake.get("demo_trim_s"),

@@ -410,9 +410,15 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
                 music_volume: float = 0.25,
                 music_duck: bool = True,
                 clip_audio: Optional[Sequence[Optional[str]]] = None,
-                text_card: Optional[Path] = None
+                text_card: Optional[Path] = None,
+                hook: Optional[Path] = None
                 ) -> Dict[str, Any]:
-    """clips -> [demo] -> [packshot], subtitles, then the compliance overlays.
+    """[hook] -> clips -> [demo] -> [packshot], subtitles, then the overlays.
+
+    A hook is the producer's own opening -- a shot that has already performed,
+    from the library -- so it keeps its sound and is subtitled like a shot; a
+    demo is a product placement and is muted under the bed. Neither is a scene:
+    the plan does not know about them, and the edit adds them to the cut.
 
     The packshot goes LAST because it is what replaces the reference's own
     product shots -- the ad ends on our product, not theirs. Subtitles are burned
@@ -426,6 +432,13 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
     work = Path(tempfile.mkdtemp(prefix="fjor-assemble-"))
     try:
         segments, manifest = [], []
+        if hook:
+            if not Path(hook).exists():
+                raise AssembleError(f"assembly: missing hook: {hook}")
+            p = normalise(Path(hook), work / "seg_hook.mp4", size)
+            segments.append(p)
+            manifest.append({"role": "hook", "source": str(hook),
+                             "duration_s": round(duration_of(p), 3)})
         for i, clip in enumerate(clips):
             track = (clip_audio or [None] * len(clips))[i] if clip_audio else None
             p = normalise(Path(clip), work / f"seg_{i:02d}.mp4", size,
@@ -448,7 +461,7 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
         # Where the packshot starts: the hard right edge for subtitles. It is
         # MEASURED, never summed -- with a crossfade every transition eats its
         # own duration, so the sum of the parts is not the length of the whole.
-        speech_count = sum(1 for m in manifest if m["role"] == "clip")
+        speech_count = sum(1 for m in manifest if m["role"] in ("clip", "hook"))
         speech_segments = segments[:speech_count]
         if crossfade_s and len(speech_segments) > 1:
             speech_only = crossfade(speech_segments, work / "speech.mp4",

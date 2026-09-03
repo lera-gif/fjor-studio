@@ -71,7 +71,18 @@ At **GATE_CLIPS** (the shots, before they are cut together) and again at
 running order, drag it to the tray to take it out of the cut (or drag it back
 in), pick the music bed, set the subtitle colour and size or turn them off. Applying re-cuts the draft — ffmpeg only, nothing is bought
 again. That is why the bed is no longer a question the brief asks: it is judged
-against the cut, not imagined before it.
+against the cut, not imagined before it — and the editor plays a bed before you
+choose it. The same editor opens the cut with a **hook** or places a product
+**insert** before the packshot, both from the **Library** (sidebar): your own
+clips, and shots kept from other jobs with **Keep in library** on a clip card.
+
+Every plate and clip card at a gate has **Regenerate…**, which is the revise
+dialog with that shot already ticked. The **Prompts** card is editable at a gate:
+save the words, then regenerate the shot from them. A finished job has
+**Reopen the cut…**, which puts it back at GATE_DRAFT under the same id;
+approving again replaces the delivered files (the old ones go to `_to_delete/`).
+A vertical that is not in the list yet is added from the new-job dialog with its
+id prefix and delivery folder; it gets no house lore until someone writes it.
 
 ### Dubbing
 

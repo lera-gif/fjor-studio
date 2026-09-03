@@ -6,7 +6,14 @@ Drop a file in a folder and it becomes selectable. Nothing here is generated.
   optional `<name>_45.mp4` twin; without the twin the 4:5 export is centre-cropped
   from the 9:16. Selected with `--packshot <name>` (the stem before `_916`).
 - **demos/** — a product-demo sequence stitched in immediately before the packshot.
-- **music bed/** — background music.
+- **music bed/** — background music. The editor plays a bed before you pick it.
+- **library/** — the clip library, kept by the dashboard rather than by hand: your
+  own clips (a hook that has performed, a product placement with the app or the
+  table) and shots kept from jobs, each `<id>.mp4` with an `<id>.json` beside it
+  naming it and, for a kept shot, the prompts that made it. At a gate the editor
+  opens the cut with one (**hook**: keeps its sound, is subtitled) or places one
+  before the packshot (**insert**: muted under the bed). Removing an item moves
+  it to `library/_to_delete/`.
 - **disclaimers/** — the approved burnt-in overlays, 1080x1920 and 1080x1350
   transparent PNGs. `disclaimer*` runs the whole length; `cwaDisclaimer*`
   ("Created with AI") covers the first three seconds only.
@@ -36,6 +43,6 @@ means free ON YOUTUBE: several tracks want attribution and the licence does not
 automatically cover a paid placement. Check before shipping one. Everything
 under the other folders is Suno-generated and therefore yours.
 
-`music bed/` and `demos/` are not — 35M of optional media. A checkout without
+`music bed/`, `demos/` and `library/` are not — optional media. A checkout without
 them works; the editor's bed list is simply empty until files are dropped in.
 Any `.mp3` in `music bed/` and any `.mp4` in `demos/` is picked up by name.

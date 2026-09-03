@@ -12,9 +12,27 @@ from .pipeline import (GATES, PIPELINE, REVISABLE, REVISE_PREFIX, TERMINAL,
 from .store import JobStore
 
 
-def _validated_edit(job: Job, edit: Dict[str, Any]) -> Dict[str, Any]:
+EDIT_KEYS = {"order", "music", "subtitles", "hook", "insert"}
+PROMPT_FIELDS = ("image_prompt", "video_prompt", "end_image_prompt")
+
+
+def _validated_edit(job: Job, edit: Dict[str, Any],
+                    assets_dir: Optional[Path] = None) -> Dict[str, Any]:
     """A rejected edit is better than a cut that quietly lost a shot."""
     out: Dict[str, Any] = {}
+    # The opening hook and the product insert are library clips. Checked here,
+    # against the library, because assembly discovering a missing one means a
+    # re-cut that fails after the producer walked away.
+    for key in ("hook", "insert"):
+        if key not in edit:
+            continue
+        item_id = str(edit[key] or "").strip()
+        if item_id and assets_dir is not None:
+            from .. import library as library_mod
+            if library_mod.item_path(assets_dir, item_id) is None:
+                raise TransitionError(
+                    f"edit.{key}: '{item_id}' is not in the clip library")
+        out[key] = item_id
     if "order" in edit:
         known = [s["idx"] for s in job.scenes]
         try:
@@ -44,7 +62,7 @@ def _validated_edit(job: Job, edit: Dict[str, Any]) -> Dict[str, Any]:
                 f"edit.subtitles: unknown setting(s) {unknown} "
                 f"(known: {', '.join(sorted(allowed))})")
         out["subtitles"] = dict(subs)
-    unknown = sorted(set(edit) - {"order", "music", "subtitles"})
+    unknown = sorted(set(edit) - EDIT_KEYS)
     if unknown:
         raise TransitionError(f"edit: unknown key(s) {unknown}")
     return out
@@ -59,6 +77,10 @@ def _describe_edit(job: Job, edit: Dict[str, Any]) -> str:
                     + (f", dropped {dropped}" if dropped else ""))
     if "music" in edit:
         bits.append(f"music {edit['music'] or 'none'}")
+    if edit.get("hook"):
+        bits.append("hook " + str(edit["hook"]))
+    if edit.get("insert"):
+        bits.append("insert " + str(edit["insert"]))
     if "subtitles" in edit:
         subs = edit["subtitles"]
         said = ", ".join(f"{k}={v}" for k, v in sorted(subs.items()))
@@ -257,7 +279,7 @@ class Engine:
         if job.state not in GATES:
             raise TransitionError(f"job {job.id} is in '{job.state}', not at a gate")
         merged = dict(job.meta.get("edit") or {})
-        merged.update(_validated_edit(job, edit))
+        merged.update(_validated_edit(job, edit, self._assets_dir()))
         job.meta["edit"] = merged
         job.add_event("edit", _describe_edit(job, merged))
         self.store.save(job)
@@ -266,6 +288,74 @@ class Engine:
         job.revise_return = job.state
         job.state = REVISE_PREFIX + "assembly"
         job.gate_ready = False
+        self.store.save(job)
+        return self.run(job)
+
+    def _assets_dir(self) -> Optional[Path]:
+        try:
+            return Path(self.config.assets_dir)
+        except Exception:  # noqa: BLE001 -- a bare config in a test has none
+            return None
+
+    def set_prompt(self, job: Job, scene_idx: int, fields: Dict[str, Any]) -> Job:
+        """The producer rewrites a scene's prompt by hand.
+
+        Only at a gate, like an edit: a prompt changed under a running stage
+        would describe a generation nobody asked for. It changes the TEXT and
+        nothing else -- the plate or clip already bought stays until the
+        producer sends that scene back, which is what regenerates it from the
+        new words. A rewrite (`revise prompts`) still replaces every prompt."""
+        if job.state not in GATES:
+            raise TransitionError(f"job {job.id} is in '{job.state}', not at a gate")
+        raw = next((s for s in job.scenes if s["idx"] == int(scene_idx)), None)
+        if raw is None:
+            raise TransitionError(f"job {job.id} has no scene {scene_idx}")
+        fields = dict(fields or {})
+        unknown = sorted(set(fields) - set(PROMPT_FIELDS))
+        if unknown:
+            raise TransitionError(
+                f"prompt: unknown field(s) {unknown} "
+                f"(editable: {', '.join(PROMPT_FIELDS)})")
+        changed = []
+        for key in PROMPT_FIELDS:
+            if key not in fields:
+                continue
+            text = str(fields[key] or "").strip()
+            if key != "end_image_prompt" and not text:
+                raise TransitionError(f"prompt: {key} cannot be empty")
+            if key == "end_image_prompt" and text and not raw.get("end_image_prompt"):
+                raise TransitionError(
+                    "prompt: this shot does not transform, so it has no end frame "
+                    "to describe -- a transformation is asked for in the brief")
+            if text != str(raw.get(key) or ""):
+                raw[key] = text
+                changed.append(key)
+        if not changed:
+            raise TransitionError("prompt: nothing changed")
+        job.add_event("prompt_edited",
+                      f"scene {scene_idx}: {', '.join(changed)} rewritten by hand",
+                      scene=int(scene_idx), fields=changed)
+        self.store.save(job)
+        return job
+
+    def reopen(self, job: Job, note: str = "") -> Job:
+        """A finished job back at GATE_DRAFT, so a shot can be regenerated or
+        the cut changed without starting a new creative.
+
+        Approving it again re-runs finalize, preflight and delivery; delivery
+        never hard-deletes, so the shipped files move to `_to_delete/` and
+        the new ones take their names."""
+        if job.state != "done":
+            raise TransitionError(
+                f"job {job.id} is in '{job.state}' -- only a finished job is reopened")
+        if not all(s.get("clip") for s in job.scenes):
+            raise TransitionError(f"job {job.id} has scenes without a clip")
+        job.error = None
+        job.state = "GATE_DRAFT"
+        job.gate_ready = False
+        job.add_event("reopened",
+                      note or "back at GATE_DRAFT; the delivered files stay until "
+                              "this is approved again")
         self.store.save(job)
         return self.run(job)
 

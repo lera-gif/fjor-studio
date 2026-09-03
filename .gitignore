@@ -17,6 +17,9 @@ jobs/
 # (11M) and the demo clips (24M) are optional and stay out; drop your own in.
 assets/music bed/
 assets/demos/*.mp4
+# the clip library: a producer's own hooks and inserts, and generations kept
+# from jobs. Media, so it stays out like the beds do.
+assets/library/
 
 # dropped reference videos, staged before a job copies them into ref/
 uploads/

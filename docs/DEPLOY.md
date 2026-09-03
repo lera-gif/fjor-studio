@@ -55,7 +55,8 @@ cannot produce a deliverable cut without them. Two things are not:
 | | |
 |---|---|
 | `assets/music bed/` | **Not in git. It travels with the folder, not with a clone.** `share_copy.sh` copies the beds across as files, so a shared folder or zip has the library even though no commit contains it — 435 MB of mp3 in a repository would sit in every clone forever. A `git clone` from GitHub gets the code and no beds; copy `assets/music bed/` into the clone by hand (minus `_to_delete/`, see below) before expecting the editor to offer any. |
-| `assets/demos/` | Optional. Only used by jobs that ask for a demo insert. |
+| `assets/demos/` | Optional. Only used by jobs that ask for a demo insert from the CLI. |
+| `assets/library/` | The clip library the dashboard keeps: a producer's own hooks and inserts, and shots kept from jobs. Same rule as the beds -- media, not in git, travels with the folder and not with a clone. A job whose edit names a library clip that is not there fails its re-cut and says which one. |
 
 Neither stops a job: with no beds the editor's list is simply empty.
 
