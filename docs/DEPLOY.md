@@ -54,7 +54,7 @@ cannot produce a deliverable cut without them. Two things are not:
 
 | | |
 |---|---|
-| `assets/music bed/` | **Not in git, but it travels.** `share_copy.sh` copies the beds across as files, so a shared copy has the library even though no commit contains it — 435 MB of mp3 in a repository would sit in every clone forever. |
+| `assets/music bed/` | **Not in git. It travels with the folder, not with a clone.** `share_copy.sh` copies the beds across as files, so a shared folder or zip has the library even though no commit contains it — 435 MB of mp3 in a repository would sit in every clone forever. A `git clone` from GitHub gets the code and no beds; copy `assets/music bed/` into the clone by hand (minus `_to_delete/`, see below) before expecting the editor to offer any. |
 | `assets/demos/` | Optional. Only used by jobs that ask for a demo insert. |
 
 Neither stops a job: with no beds the editor's list is simply empty.
