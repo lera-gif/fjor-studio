@@ -14,6 +14,7 @@ Nothing here is ever hard-deleted -- removing an item moves it under
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -64,8 +65,63 @@ def list_items(assets_dir: Path) -> List[Dict[str, Any]]:
         media = root / str(meta.get("file") or "")
         meta["missing"] = not media.is_file()
         out.append(meta)
+
+    # A clip DROPPED INTO THE FOLDER by hand is adopted on sight, the way the
+    # bed library and the packshots are simply scanned. Requiring an upload
+    # through the dashboard made the folder lie: the file was plainly there and
+    # the picker said "none".
+    claimed = {str(m.get("file") or "") for m in out}
+    for media in root.iterdir():
+        if (media.is_file() and media.suffix.lower() in CLIP_EXT
+                and media.name not in claimed):
+            adopted = _adopt(root, media)
+            if adopted:
+                out.append(adopted)
+
     out.sort(key=lambda m: str(m.get("added_at") or ""), reverse=True)
     return out
+
+
+def _adopt(root: Path, media: Path) -> Optional[Dict[str, Any]]:
+    """Give a hand-dropped clip a sidecar, keeping the name it was given.
+
+    The id is derived from the FILENAME rather than randomly, so it is the same
+    on every scan -- a job that stored `insert: <id>` still resolves after a
+    restart. Renaming the file in Finder therefore makes a new item and the old
+    id reads as missing, which is honest: it is a different clip as far as
+    anything that referenced it can tell.
+
+    The file itself is left where the producer put it, under the name they gave
+    it. Renaming someone's file to suit our own scheme would lose the only
+    handle they have on it."""
+    item_id = (f"{_slug(media.stem)}-"
+               f"{hashlib.md5(media.name.encode('utf-8')).hexdigest()[:6]}")
+    if not valid_id(item_id):
+        return None
+    meta: Dict[str, Any] = {
+        "id": item_id,
+        "name": media.stem,
+        "file": media.name,
+        "kind": "dropped",
+    }
+    try:
+        meta["added_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                         time.gmtime(media.stat().st_mtime))
+    except OSError:
+        meta["added_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    try:
+        from .assemble import duration_of, has_audio
+        meta["duration_s"] = round(duration_of(media), 2)
+        meta["has_audio"] = bool(has_audio(media))
+    except Exception:  # noqa: BLE001 -- a probe failure is not a lost clip
+        pass
+    try:
+        (root / f"{item_id}.json").write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass            # a read-only assets dir still lists; it just re-probes
+    meta["missing"] = False
+    return meta
 
 
 def get(assets_dir: Path, item_id: str) -> Optional[Dict[str, Any]]:
@@ -73,7 +129,10 @@ def get(assets_dir: Path, item_id: str) -> Optional[Dict[str, Any]]:
         return None
     meta_path = _root(assets_dir) / f"{item_id}.json"
     if not meta_path.is_file():
-        return None
+        # a hand-dropped clip on a read-only assets dir has no sidecar to read,
+        # but it is still a real item -- find it the way the listing does
+        return next((m for m in list_items(assets_dir)
+                     if m.get("id") == item_id), None)
     try:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):

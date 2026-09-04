@@ -185,7 +185,16 @@ textarea.prompt-edit{font:12px/1.5 ui-monospace,Menlo,monospace;min-height:84px;
 </div>
 
 <dialog id="dubDlg" style="max-width:900px;max-height:92vh;overflow:auto">
-  <h3 style="margin:0 0 4px">Dub a finished cut</h3>
+  <!-- Close lives HERE, not in the footer: the footer is inside #dubBody, which
+       is hidden until a video is dropped, so a mis-click used to open a dialog
+       with no way out of it. Every other dialog gets this free from its
+       <form method="dialog">; this one has no form, because its Dub button must
+       NOT close the window. -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+    <h3 style="margin:0 0 4px">Dub a finished cut</h3>
+    <button id="dubClose" aria-label="Close" title="Close (Esc)"
+            style="padding:4px 12px;line-height:1.2">Close</button>
+  </div>
   <div class="hint" style="margin-bottom:14px">The whole video is dubbed once,
     the old burnt-in subtitles are covered with a blurred band, and new ones are
     burned from the dub's own word timings.</div>
@@ -428,6 +437,9 @@ textarea.prompt-edit{font:12px/1.5 ui-monospace,Menlo,monospace;min-height:84px;
   <div class="drop" id="libDrop" style="padding:16px">
     <div class="big">Drop a clip to add it</div>
     <div class="hint">or click to choose &middot; mp4 or mov &middot; it is normalised to the frame when cut, never re-generated</div>
+    <div class="hint" style="margin-top:6px">or just put the file in
+      <code>assets/library/</code> &mdash; anything in that folder is picked up,
+      like the music beds</div>
     <div class="bar" id="libBar" style="display:none"><i></i></div>
   </div>
   <input type="file" id="libInput" accept="video/*" style="display:none">
@@ -1528,6 +1540,7 @@ async function dubRefresh(){
   $('#dubAt').addEventListener('change',dubPreviewSoon);
   $('#dubGo').onclick=dubGo;
   $('#dubCancel').onclick=()=>$('#dubDlg').close();
+  $('#dubClose').onclick=()=>$('#dubDlg').close();
   $('#dubBtn').onclick=()=>{ dubDefaults(); dubLabels(); dubRefresh();
     $('#dubDlg').showModal(); };
 })();

@@ -255,3 +255,77 @@ def test_a_bed_is_served_by_its_picker_name(live):
     assert get(f"{base}/music/Calm/Test%20Bed", method="HEAD")[0] == 200
     assert get(f"{base}/music/Calm/No%20Such%20Bed")[0] == 404
     assert get(f"{base}/music/..%2F..%2Fconfig%2Fauth.yaml")[0] in (400, 404)
+
+
+# -- a clip dropped into the folder by hand -----------------------------------
+#
+# The beds and the packshots are simply scanned; the library used to demand an
+# upload through the dashboard, so a file plainly sitting in the folder did not
+# exist as far as the picker was concerned.
+
+def test_a_clip_dropped_into_the_folder_is_picked_up(tmp_path):
+    from conftest import a_finished_cut
+    from fjor_studio import library
+
+    root = tmp_path / "library"
+    root.mkdir()
+    a_finished_cut(root / "Product demo.mp4", w=270, h=480, seconds=1)
+
+    items = library.list_items(tmp_path)
+    assert len(items) == 1
+    assert items[0]["name"] == "Product demo"
+    assert items[0]["kind"] == "dropped"
+    assert items[0]["missing"] is False
+
+
+def test_a_dropped_clip_keeps_the_name_the_producer_gave_it(tmp_path):
+    """Renaming someone's file to suit our scheme loses the only handle they
+    have on it."""
+    from conftest import a_finished_cut
+    from fjor_studio import library
+
+    root = tmp_path / "library"
+    root.mkdir()
+    a_finished_cut(root / "Product demo.mp4", w=270, h=480, seconds=1)
+    library.list_items(tmp_path)
+    assert (root / "Product demo.mp4").is_file()      # still there, still named
+
+
+def test_a_dropped_clips_id_is_stable_across_scans(tmp_path):
+    """A job stores `insert: <id>`. If the id were random per scan, the cut
+    would stop resolving the moment the dashboard restarted."""
+    from conftest import a_finished_cut
+    from fjor_studio import library
+
+    root = tmp_path / "library"
+    root.mkdir()
+    a_finished_cut(root / "hook.mp4", w=270, h=480, seconds=1)
+    first = library.list_items(tmp_path)[0]["id"]
+    (root / f"{first}.json").unlink()                 # force a fresh adoption
+    assert library.list_items(tmp_path)[0]["id"] == first
+
+
+def test_a_dropped_clip_resolves_to_its_media(tmp_path):
+    """The picker returns an id; the cut has to turn it back into a file."""
+    from conftest import a_finished_cut
+    from fjor_studio import library
+
+    root = tmp_path / "library"
+    root.mkdir()
+    a_finished_cut(root / "Product demo.mp4", w=270, h=480, seconds=1)
+    item_id = library.list_items(tmp_path)[0]["id"]
+    assert library.item_path(tmp_path, item_id) == root / "Product demo.mp4"
+    assert library.get(tmp_path, item_id)["id"] == item_id
+
+
+def test_adopting_does_not_duplicate_an_uploaded_item(tmp_path):
+    """An uploaded clip already has a sidecar; the scan must not list it twice."""
+    from conftest import a_finished_cut
+    from fjor_studio import library
+
+    src = tmp_path / "src.mp4"
+    a_finished_cut(src, w=270, h=480, seconds=1)
+    library.add_upload(tmp_path, src, "Uploaded one")
+    before = library.list_items(tmp_path)
+    assert len(before) == 1
+    assert len(library.list_items(tmp_path)) == 1      # and again, after adoption

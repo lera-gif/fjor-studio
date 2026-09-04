@@ -1421,3 +1421,39 @@ def test_a_bad_token_never_reaches_the_filesystem(live):
     for bad in ("..", "a/b", "x" * 80, ""):
         with pytest.raises(ValueError):
             studio._dub_dir(bad)
+
+
+def test_every_dialog_can_be_closed_without_doing_anything():
+    """A mis-click must never trap the producer.
+
+    The Dub dialog did exactly that: its only Close button sat inside
+    #dubBody, which is display:none until a video is dropped, so opening it by
+    accident left no way out but reloading the page. Every other dialog gets a
+    close for free from its <form method="dialog">; this one has no form,
+    because its Dub button must not close the window.
+    """
+    import re
+    from fjor_studio.dashboard.page import PAGE
+
+    # Comments first, or this test defeats itself: the comment explaining the
+    # fix quotes `<form method="dialog">`, and scanning it made the check skip
+    # the one dialog it exists to guard. Caught by a control run, not by the
+    # test passing.
+    page = re.sub(r"<!--.*?-->", "", PAGE, flags=re.S)
+
+    for m in re.finditer(r'<dialog id="(\w+)"[^>]*>', page):
+        name = m.group(1)
+        body = page[m.end():page.index("</dialog>", m.end())]
+        if 'method="dialog"' in body:
+            continue                      # any button in it closes it
+        # otherwise it needs a close control ABOVE the first hidden block --
+        # everything from there down may be invisible when the dialog opens
+        cut = re.search(r'<div id="\w+" style="display:none', body)
+        visible = body[:cut.start()] if cut else body
+        assert re.search(r'id="\w*[Cc]lose"', visible), (
+            f"dialog #{name} has no always-visible way to close it")
+
+
+def test_the_dub_dialogs_close_button_is_wired():
+    from fjor_studio.dashboard.page import PAGE
+    assert "$('#dubClose').onclick" in PAGE
