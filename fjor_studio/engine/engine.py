@@ -12,12 +12,15 @@ from .pipeline import (GATES, PIPELINE, REVISABLE, REVISE_PREFIX, TERMINAL,
 from .store import JobStore
 
 
-EDIT_KEYS = {"order", "music", "subtitles", "hook", "insert"}
+EDIT_KEYS = {"order", "music", "subtitles", "hook", "insert",
+             "mute", "music_volume", "music_duck", "trim", "vo"}
 PROMPT_FIELDS = ("image_prompt", "video_prompt", "end_image_prompt")
 
 
 def _validated_edit(job: Job, edit: Dict[str, Any],
-                    assets_dir: Optional[Path] = None) -> Dict[str, Any]:
+                    assets_dir: Optional[Path] = None,
+                    crossfade_s: float = 0.0,
+                    job_dir: Optional[Path] = None) -> Dict[str, Any]:
     """A rejected edit is better than a cut that quietly lost a shot."""
     out: Dict[str, Any] = {}
     # The opening hook and the product insert are library clips. Checked here,
@@ -62,6 +65,140 @@ def _validated_edit(job: Job, edit: Dict[str, Any],
                 f"edit.subtitles: unknown setting(s) {unknown} "
                 f"(known: {', '.join(sorted(allowed))})")
         out["subtitles"] = dict(subs)
+    if "mute" in edit:
+        # Which shots lose their OWN audio. A shot whose line was spoken
+        # separately is unaffected -- that voice is a separate asset and gets
+        # its own controls; this only silences what the clip itself carries.
+        known = [s["idx"] for s in job.scenes]
+        try:
+            mute = sorted({int(i) for i in (edit["mute"] or [])})
+        except (TypeError, ValueError):
+            raise TransitionError("edit.mute must be a list of scene numbers")
+        unknown_m = [i for i in mute if i not in known]
+        if unknown_m:
+            raise TransitionError(
+                f"edit.mute names scenes that do not exist: {unknown_m} "
+                f"(this job has {known})")
+        out["mute"] = mute
+    if "music_volume" in edit:
+        try:
+            vol = float(edit["music_volume"])
+        except (TypeError, ValueError):
+            raise TransitionError("edit.music_volume must be a number")
+        if not 0.0 <= vol <= 1.0:
+            raise TransitionError(
+                f"edit.music_volume is {vol}; it is a fraction, 0 to 1")
+        out["music_volume"] = round(vol, 3)
+    if "music_duck" in edit:
+        out["music_duck"] = bool(edit["music_duck"])
+    if "trim" in edit:
+        # Per shot: [in, out] in seconds of the CLIP. `out` may be null for
+        # "to the end". Checked against the shot's length when it is known,
+        # and against the crossfade -- every transition consumes its own
+        # duration, so a segment shorter than the fade does not error, it
+        # simply vanishes from the cut. A refusal here names both numbers.
+        raw = edit["trim"] or {}
+        if not isinstance(raw, dict):
+            raise TransitionError("edit.trim must map scene numbers to [in, out]")
+        by_idx = {s["idx"]: s for s in job.scenes}
+        trims: Dict[str, Any] = {}
+        for k, v in raw.items():
+            try:
+                idx = int(k)
+            except (TypeError, ValueError):
+                raise TransitionError(f"edit.trim: '{k}' is not a scene number")
+            if idx not in by_idx:
+                raise TransitionError(
+                    f"edit.trim names scene {idx}, which does not exist "
+                    f"(this job has {sorted(by_idx)})")
+            if v in (None, [], {}):
+                continue                          # an explicit "no trim"
+            try:
+                t_in = float(v[0] or 0.0)
+                t_out = None if (len(v) < 2 or v[1] in (None, "")) else float(v[1])
+            except (TypeError, ValueError, IndexError):
+                raise TransitionError(
+                    f"edit.trim[{idx}] must be [in, out] in seconds")
+            if t_in < 0:
+                raise TransitionError(f"edit.trim[{idx}]: in-point {t_in} is before 0")
+            length = by_idx[idx].get("duration_s")
+            end = t_out if t_out is not None else (float(length) if length else None)
+            if t_out is not None and t_out <= t_in:
+                raise TransitionError(
+                    f"edit.trim[{idx}]: out-point {t_out} is not after in-point {t_in}")
+            if length and t_in >= float(length):
+                raise TransitionError(
+                    f"edit.trim[{idx}]: in-point {t_in}s is past the end of a "
+                    f"{length}s shot")
+            if length and t_out is not None and t_out > float(length) + 0.05:
+                raise TransitionError(
+                    f"edit.trim[{idx}]: out-point {t_out}s is past the end of a "
+                    f"{length}s shot")
+            if end is not None and crossfade_s and (end - t_in) <= crossfade_s:
+                raise TransitionError(
+                    f"edit.trim[{idx}]: leaves {end - t_in:.2f}s of the shot, "
+                    f"but the crossfade is {crossfade_s}s and eats that much "
+                    f"at each join -- the shot would vanish from the cut. "
+                    f"Keep at least {crossfade_s + 0.25:.2f}s or lower the "
+                    f"crossfade.")
+            if t_in == 0.0 and t_out is None:
+                continue                          # no-op, do not record
+            trims[str(idx)] = [round(t_in, 3), None if t_out is None else round(t_out, 3)]
+        out["trim"] = trims
+    if "vo" in edit:
+        # Per shot with a separately spoken line: {offset, in, out}. `offset`
+        # is seconds after the shot starts and may exceed the shot -- that is
+        # how a line is pushed into the next one on purpose. `in`/`out` trim
+        # the RECORDING, checked against its real length.
+        raw = edit["vo"] or {}
+        if not isinstance(raw, dict):
+            raise TransitionError("edit.vo must map scene numbers to {offset, in, out}")
+        by_idx = {s["idx"]: s for s in job.scenes}
+        vo: Dict[str, Any] = {}
+        for k, v in raw.items():
+            try:
+                idx = int(k)
+            except (TypeError, ValueError):
+                raise TransitionError(f"edit.vo: '{k}' is not a scene number")
+            if idx not in by_idx:
+                raise TransitionError(f"edit.vo names scene {idx}, which does not exist")
+            if not by_idx[idx].get("vo_track"):
+                raise TransitionError(
+                    f"edit.vo[{idx}]: that shot has no separately spoken line to move")
+            if not v:
+                continue
+            if not isinstance(v, dict):
+                raise TransitionError(f"edit.vo[{idx}] must be an object")
+            try:
+                off = float(v.get("offset") or 0.0)
+                t_in = float(v.get("in") or 0.0)
+                t_out = None if v.get("out") in (None, "") else float(v["out"])
+            except (TypeError, ValueError):
+                raise TransitionError(f"edit.vo[{idx}]: offset, in and out are seconds")
+            if off < 0 or t_in < 0:
+                raise TransitionError(f"edit.vo[{idx}]: offset and in-point cannot be negative")
+            if t_out is not None and t_out <= t_in:
+                raise TransitionError(
+                    f"edit.vo[{idx}]: out-point {t_out} is not after in-point {t_in}")
+            if job_dir is not None:
+                try:
+                    from ..assemble import duration_of
+                    length = float(duration_of(job_dir / by_idx[idx]["vo_track"]))
+                except Exception:  # noqa: BLE001 -- unprobeable: skip the bound
+                    length = 0.0
+                if length and t_in >= length:
+                    raise TransitionError(
+                        f"edit.vo[{idx}]: in-point {t_in}s is past the end of a "
+                        f"{length:.2f}s recording")
+                if length and t_out is not None and t_out > length + 0.05:
+                    raise TransitionError(
+                        f"edit.vo[{idx}]: out-point {t_out}s is past the end of a "
+                        f"{length:.2f}s recording")
+            if off == 0.0 and t_in == 0.0 and t_out is None:
+                continue                          # no-op: where it always sat
+            vo[str(idx)] = {"offset": round(off, 3), "in": round(t_in, 3),
+                            "out": None if t_out is None else round(t_out, 3)}
+        out["vo"] = vo
     unknown = sorted(set(edit) - EDIT_KEYS)
     if unknown:
         raise TransitionError(f"edit: unknown key(s) {unknown}")
@@ -86,6 +223,23 @@ def _describe_edit(job: Job, edit: Dict[str, Any]) -> str:
         said = ", ".join(f"{k}={v}" for k, v in sorted(subs.items()))
         bits.append("subtitles "
                     + ("off" if subs.get("enabled") is False else said))
+    if edit.get("mute"):
+        bits.append("muted " + "-".join(str(i) for i in edit["mute"]))
+    if edit.get("vo"):
+        bits.append("voice " + ", ".join(
+            f"{k}: +{v.get('offset', 0)}s"
+            + (f" [{v.get('in', 0)}–{'end' if v.get('out') is None else v['out']}]"
+               if v.get('in') or v.get('out') is not None else "")
+            for k, v in sorted(edit["vo"].items(), key=lambda kv: int(kv[0]))))
+    if edit.get("trim"):
+        bits.append("trim " + ", ".join(
+            f"{k}→{v[0]}–{'end' if v[1] is None else v[1]}s"
+            for k, v in sorted(edit["trim"].items(), key=lambda kv: int(kv[0]))))
+    if "music_volume" in edit:
+        bits.append(f"bed at {int(round(edit['music_volume'] * 100))}%")
+    if "music_duck" in edit:
+        bits.append("bed ducks under speech" if edit["music_duck"]
+                    else "bed does not duck")
     return "edit: " + ("; ".join(bits) if bits else "unchanged")
 
 
@@ -295,7 +449,9 @@ class Engine:
         if job.state not in GATES:
             raise TransitionError(f"job {job.id} is in '{job.state}', not at a gate")
         merged = dict(job.meta.get("edit") or {})
-        merged.update(_validated_edit(job, edit, self._assets_dir()))
+        merged.update(_validated_edit(job, edit, self._assets_dir(),
+                                      crossfade_s=self._crossfade_for(job),
+                                      job_dir=self.store.job_dir(job.id)))
         job.meta["edit"] = merged
         job.add_event("edit", _describe_edit(job, merged))
         self.store.save(job)
@@ -306,6 +462,14 @@ class Engine:
         job.gate_ready = False
         self.store.save(job)
         return self.run(job)
+
+    def _crossfade_for(self, job: Job) -> float:
+        """The same answer assembly will use: the intake's value, else config."""
+        edit_cfg = ((getattr(self.config, "pipeline", None) or {}).get("edit") or {})
+        try:
+            return float(job.intake.get("crossfade_s", edit_cfg.get("crossfade_s", 0.0)))
+        except (TypeError, ValueError):
+            return 0.0
 
     def _assets_dir(self) -> Optional[Path]:
         try:

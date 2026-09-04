@@ -294,6 +294,24 @@ All of it is on branch **`tool-v4-port`**. `main` is untouched. The tag
    the drag was only how they got it.
 4. **Dashboard UI** for drivers, morph, the card and banner mode. DONE.
 
+   **Finer editing (Sept 2026).** Their timeline, ported selectively, per the
+   Cut Control design note. Taken: per-shot trim (in/out), per-shot mute and
+   mute-all, bed volume and ducking, and the voiceover as a movable, trimmable
+   TRACK. Left: split (the owner said trim is enough), text/image overlay
+   tracks (overlap the text card), undo/redo, and their browser preview -- it
+   exists because their assembly is slow and browser-side; ours re-cuts with
+   ffmpeg for free and the draft player shows the real cut.
+
+   The voice was the one change that moved machinery rather than adding to
+   it. It had been welded into its shot by `normalise()` and silently cut off
+   by `-shortest` when longer than the shot; it is now laid over the assembled
+   cut like the bed (`mix_voices`), anchored to its shot by an offset so a
+   trim or reorder ahead of it moves the voice with its picture, mixed BEFORE
+   the bed so ducking still keys off it, and clamped at `speech_end` so it
+   never runs over the packshot. Where a shot starts is the same sum
+   `crossfade()` uses -- every join eats one fade -- and a test measures the
+   voice landing at 3.0s not 4.0s under a 0.5s crossfade.
+
    - The New-job drop zone takes an image as well as a video and SAYS which
      pipeline will run — for a banner, how many pixels will be painted above and
      below. Their tool announces the same thing with a toast, because the two

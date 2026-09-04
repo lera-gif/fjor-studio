@@ -86,7 +86,7 @@ label.tick{display:inline-flex;align-items:center;gap:6px;font-size:13px;
   min-height:96px;padding:6px;border-radius:10px;border:1px solid transparent}
 .shots.over{border-color:var(--line);background:#141414}
 .shot{background:var(--panel2);border:1px solid var(--line);border-radius:9px;
-  padding:7px;width:104px;cursor:grab;position:relative;
+  padding:7px;width:124px;cursor:grab;position:relative;
   transition:outline-color .35s,opacity .15s}
 .shot:active{cursor:grabbing}
 .shot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -108,6 +108,17 @@ label.tick{display:inline-flex;align-items:center;gap:6px;font-size:13px;
 .shot .x{position:absolute;top:4px;right:4px;padding:1px 6px;font-size:12px;
   line-height:1.25;opacity:0;transition:opacity .12s}
 .shot:hover .x,.shot:focus-within .x{opacity:1}
+.shot .trim{display:flex;gap:3px;align-items:center;margin-top:4px;font-size:11px}
+.shot .trim input{width:44px;padding:2px 4px;font-size:11px;font-variant-numeric:tabular-nums}
+.shot .trim b{font-weight:500;color:var(--faint);font-variant-numeric:tabular-nums}
+.shot .trim b.bad{color:#f0736a}
+.shot .trim.voice input{width:30px}
+/* over the thumbnail's top-left corner, where a player puts it -- the bottom
+   of the chip now belongs to the trim row */
+.shot .mute{position:absolute;left:11px;top:11px;font-size:12px;padding:1px 5px;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;opacity:.75}
+.shot .mute.on{opacity:1;border-color:var(--accent)}
+.shot .mute:disabled{opacity:.45}
 .tray{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;padding:8px;
   border:1px dashed var(--line);border-radius:10px;margin-bottom:12px}
 .tray.over{border-color:var(--accent);background:#141410}
@@ -689,8 +700,11 @@ function editState(d){
 }
 function editDirty(d){
   const a=editState(d), b=d.edit||{};
-  return JSON.stringify([a.order,a.music,a.subtitles,a.hook||'',a.insert||''])!==
-         JSON.stringify([b.order,b.music,b.subtitles,b.hook||'',b.insert||'']);
+  const sig=x=>JSON.stringify([x.order,x.music,x.subtitles,x.hook||'',x.insert||'',
+    [...(x.mute||[])].sort((p,q)=>p-q),x.music_volume,x.music_duck,
+    Object.entries(x.trim||{}).filter(([k,v])=>v&&(v[0]||v[1]!=null)).sort(),
+    Object.entries(x.vo||{}).filter(([k,v])=>v&&(v.offset||v.in||v.out!=null)).sort()]);
+  return sig(a)!==sig(b);
 }
 // A library clip picker. The library is small and named by the producer, so a
 // flat list is fine; a missing file is shown and disabled rather than hidden,
@@ -845,12 +859,46 @@ function restoreShot(idx){
   EDIT.order=[...EDIT.order,idx].sort((a,b)=>a-b); renderMain();
 }
 function setEdit(k,v){ EDIT[k]=v; renderMain(); }
+// Mute is per shot and only touches the clip's OWN sound. A shot whose line
+// was spoken separately keeps that voice -- it is a separate asset with its
+// own controls -- so its toggle is shown disabled rather than lying.
+function toggleMute(idx){
+  const m=new Set(EDIT.mute||[]);
+  m.has(idx)?m.delete(idx):m.add(idx);
+  EDIT.mute=[...m].sort((a,b)=>a-b); renderMain();
+}
+function muteAll(on){
+  EDIT.mute=on?[...EDIT.order]:[]; renderMain();
+}
+// Trim is [in, out] in seconds of the clip; a blank out-point means "to the
+// end". Kept as numbers rather than drag handles: a producer types 0.4 once
+// and it is exactly 0.4, every re-cut.
+// The voice is its own asset: offset (seconds after the shot starts, may run
+// past it on purpose), and in / out of the recording itself.
+function setVo(idx,which,raw){
+  const all=Object.assign({},EDIT.vo||{});
+  const cur=Object.assign({offset:0,in:0,out:null},all[String(idx)]||{});
+  const v=raw===''?null:Math.max(0,Math.round(parseFloat(raw)*10)/10);
+  if(which==='out') cur.out=v; else cur[which]=v||0;
+  if(!cur.offset&&!cur.in&&cur.out==null) delete all[String(idx)]; else all[String(idx)]=cur;
+  EDIT.vo=all; renderMain();
+}
+function setTrim(idx,which,raw){
+  const t=Object.assign({},EDIT.trim||{});
+  const cur=t[String(idx)]||[0,null];
+  const v=raw===''?null:Math.max(0,Math.round(parseFloat(raw)*10)/10);
+  if(which==='in') cur[0]=v||0; else cur[1]=v;
+  if(!cur[0]&&cur[1]==null) delete t[String(idx)]; else t[String(idx)]=cur;
+  EDIT.trim=t; renderMain();
+}
 function setSubs(k,v){ EDIT.subtitles={...EDIT.subtitles,[k]:v}; renderMain(); }
 function resetEdit(){ EDIT=null; EDIT_KEY=null; renderMain(); }
 async function applyEdit(){
   const d=DETAIL, recut=d.state==='GATE_DRAFT';
   await act('edit',{edit:{order:EDIT.order,music:EDIT.music,subtitles:EDIT.subtitles,
-                          hook:EDIT.hook||'',insert:EDIT.insert||''},
+                          hook:EDIT.hook||'',insert:EDIT.insert||'',
+                          mute:EDIT.mute||[],trim:EDIT.trim||{},vo:EDIT.vo||{},
+                          music_volume:EDIT.music_volume,music_duck:!!EDIT.music_duck},
                     recut:recut});
 }
 // The bed library is filed by mood, and its names carry the folder. A flat list
@@ -900,10 +948,46 @@ function editorCard(d){
       <div class="n">${inCut?pos+1+'.':'—'} scene ${idx}</div>
       <div class="muted" style="font-size:11px;margin-top:2px">
         ${s.duration_s?esc(s.duration_s)+'s':''} ${qaBadge(s.clip_qa)}</div>
+      ${inCut?(()=>{
+        const t=(e.trim||{})[String(idx)]||[0,null];
+        const len=s.duration_s?((t[1]==null?s.duration_s:t[1])-(t[0]||0)):null;
+        const xf=(d.edit&&d.edit.crossfade_s)||0;
+        const short=len!=null&&xf&&len<=xf;
+        return `<div class="trim" onpointerdown="event.stopPropagation()"
+          title="in / out, seconds of the clip — blank out-point runs to the end">
+          <input type="number" min="0" step="0.1" placeholder="0" value="${t[0]||''}"
+            ${busy?'disabled':''} onchange="setTrim(${idx},'in',this.value)">
+          <span>–</span>
+          <input type="number" min="0" step="0.1" placeholder="${s.duration_s||'end'}"
+            value="${t[1]==null?'':t[1]}" ${busy?'disabled':''}
+            onchange="setTrim(${idx},'out',this.value)">
+          ${len!=null?`<b class="${short?'bad':''}" title="${short
+            ?'shorter than the '+xf+'s crossfade — this shot would vanish from the cut'
+            :'length after trim'}">${len.toFixed(1)}s</b>`:''}</div>
+          ${s.vo_track?(()=>{
+            const v=Object.assign({offset:0,in:0,out:null},(e.vo||{})[String(idx)]||{});
+            const vl=(d.edit.vo_lengths||{})[String(idx)];
+            return `<div class="trim voice" onpointerdown="event.stopPropagation()"
+              title="the spoken line: starts this many seconds into the shot (may run past it); in / out trim the recording">
+              <span title="voice">🎙</span>
+              <input type="number" min="0" step="0.1" placeholder="0" value="${v.offset||''}"
+                ${busy?'disabled':''} onchange="setVo(${idx},'offset',this.value)" title="start, seconds into the shot">
+              <input type="number" min="0" step="0.1" placeholder="0" value="${v.in||''}"
+                ${busy?'disabled':''} onchange="setVo(${idx},'in',this.value)" title="in-point of the recording">
+              <input type="number" min="0" step="0.1" placeholder="${vl||'end'}" value="${v.out==null?'':v.out}"
+                ${busy?'disabled':''} onchange="setVo(${idx},'out',this.value)" title="out-point of the recording">
+              </div>`;})():''}`;})():''}
       ${inCut?`<button class="x" ${busy?'disabled':''} onclick="dropShot(${idx})"
         title="take it out of the cut">✕</button>`
       :`<button class="x" style="opacity:1" ${busy?'disabled':''}
         onclick="restoreShot(${idx})" title="put it back in the cut">+</button>`}
+      ${inCut?(s.vo_track
+        ?`<button class="mute" disabled title="this shot's line was spoken separately — move or trim it in the 🎙 row below">🎙</button>`
+        :`<button class="mute ${(e.mute||[]).includes(idx)?'on':''}" ${busy?'disabled':''}
+           onclick="event.stopPropagation();toggleMute(${idx})"
+           onpointerdown="event.stopPropagation()"
+           title="${(e.mute||[]).includes(idx)?'muted — click to hear it':'mute this shot\'s own sound'}">
+           ${(e.mute||[]).includes(idx)?'🔇':'🔊'}</button>`):''}
       </div>`;
   };
   const sel=(val,opts,on)=>`<select ${busy?'disabled':''} onchange="${on}">
@@ -917,6 +1001,13 @@ function editorCard(d){
         ? 'The player above keeps the old cut until you apply.'
         : 'The cut is made when you approve this gate.'}</div>
     <div class="shots">${e.order.map((i,p)=>chip(i,p)).join('')}</div>
+    <div class="row" style="gap:8px;margin:2px 0 6px">
+      <button ${busy?'disabled':''} onclick="muteAll(true)" style="font-size:12px"
+        title="mute every shot's own sound — separately spoken lines are unaffected">🔇 Mute all shots</button>
+      <button ${busy||!(e.mute||[]).length?'disabled':''} onclick="muteAll(false)" style="font-size:12px">🔊 Unmute all</button>
+      <span class="muted" style="font-size:12px">${(e.mute||[]).length
+        ?(e.mute.length+' shot'+(e.mute.length>1?'s':'')+' muted')
+        :'every shot keeps its own sound'}</span></div>
     <div class="tray">
       <span class="lbl">${out.length?'Not in the cut':'Drag a shot here to take it out'}</span>
       ${out.map(i=>chip(i,-1)).join('')}</div>
@@ -927,6 +1018,15 @@ function editorCard(d){
           ${musicOptions(e.music_library, e.music||'',
             `<option value="" ${e.music?'':'selected'}>— none —</option>`)}
         </select>${bedButton(e.music||'')}</div></div>
+      <div><label>Bed volume <span class="muted" id="edVolV">${Math.round((e.music_volume??0.25)*100)}%</span></label>
+        <input type="range" min="0" max="100" step="5" ${busy||!e.music?'disabled':''}
+          value="${Math.round((e.music_volume??0.25)*100)}"
+          oninput="document.getElementById('edVolV').textContent=this.value+'%'"
+          onchange="setEdit('music_volume',+this.value/100)"
+          title="${e.music?'how loud the bed sits under the cut':'pick a bed first'}"></div>
+      <div><label>Under speech</label>
+        ${sel(e.music_duck===false?'flat':'duck',[['duck','bed ducks'],['flat','bed stays flat']],
+              'setEdit(\'music_duck\',this.value===\'duck\')')}</div>
       <div><label>Opening hook</label>
         ${libSelect(e.library,e.hook||'','setEdit(\'hook\',this.value)',busy,'— none —')}</div>
       <div><label>Product insert — before the packshot</label>

@@ -25,7 +25,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Tuple, Any, Dict, List, Optional, Sequence
 
 FPS = 30
 SAMPLE_RATE = 48000
@@ -160,7 +160,8 @@ SIZES = {"9:16": Size(1080, 1920, "9:16"), "4:5": Size(1080, 1350, "4:5")}
 
 def normalise(src: Path, dest: Path, size: Size, mute: bool = False,
               trim_s: Optional[float] = None,
-              audio: Optional[Path] = None) -> Path:
+              audio: Optional[Path] = None,
+              start_s: Optional[float] = None) -> Path:
     """One segment, in the exact shape concat requires.
 
     scale-to-cover then centre-crop -- never pad. A padded 9:16 source in a 4:5
@@ -169,6 +170,11 @@ def normalise(src: Path, dest: Path, size: Size, mute: bool = False,
     vf = (f"scale={size.w}:{size.h}:force_original_aspect_ratio=increase,"
           f"crop={size.w}:{size.h},setsar=1,fps={FPS},format=yuv420p")
     cmd: List[str] = [_bin("ffmpeg"), "-y", "-v", "error"]
+    # -ss BEFORE -i: with a re-encode ffmpeg seeks to the keyframe and decodes
+    # forward, so the in-point is frame-accurate and the seek is not a full
+    # decode of everything before it.
+    if start_s:
+        cmd += ["-ss", f"{start_s:.3f}"]
     if trim_s:
         cmd += ["-t", f"{trim_s:.3f}"]
     cmd += ["-i", str(src)]
@@ -273,6 +279,53 @@ def mix_music(video: Path, music: Path, dest: Path, volume: float = 0.25,
          "-movflags", "+faststart", str(dest)],
         f"mixing the music bed{'' if can_duck else ' (no ducking on this build)'}")
     return dest
+
+
+def mix_voices(video: Path, tracks: Sequence[Dict[str, Any]],
+               segment_starts: Sequence[float], speech_end: float,
+               dest: Path, crf: int = 21):
+    """Lay each spoken line onto the cut at an absolute second.
+
+    A track is {path, segment, offset, in, out}: `segment` indexes the cut,
+    `offset` is seconds after that shot starts, `in`/`out` trim the recording
+    itself. Every voice is clamped to `speech_end` -- the picture boundary
+    where the packshot begins -- so narration never runs over the product.
+    `duration=first` keeps the result exactly as long as the video."""
+    exe = _bin("ffmpeg")
+    cmd = [exe, "-y", "-v", "error", "-i", str(video)]
+    chains, labels, placed = [], [], []
+    for n, t in enumerate(tracks):
+        seg = int(t.get("segment", 0))
+        base = segment_starts[seg] if 0 <= seg < len(segment_starts) else 0.0
+        at = max(0.0, base + float(t.get("offset") or 0.0))
+        t_in = float(t.get("in") or 0.0)
+        t_out = t.get("out")
+        if at >= speech_end:
+            placed.append({"source": Path(t["path"]).name, "segment": seg,
+                           "at_s": round(at, 3), "dropped": "starts after the last shot"})
+            continue
+        cmd += ["-i", str(t["path"])]
+        room = speech_end - at                     # how long it may run
+        trim = f"atrim=start={t_in:.3f}" + (f":end={float(t_out):.3f}" if t_out is not None else "")
+        chains.append(f"[{n + 1}:a]{trim},asetpts=PTS-STARTPTS,"
+                      f"aresample={SAMPLE_RATE},atrim=end={room:.3f},"
+                      f"adelay={int(round(at * 1000))}|{int(round(at * 1000))},"
+                      f"apad[v{n}]")
+        labels.append(f"[v{n}]")
+        placed.append({"source": Path(t["path"]).name, "segment": seg,
+                       "at_s": round(at, 3), "in_s": t_in,
+                       "out_s": None if t_out is None else float(t_out),
+                       "clamped_at_s": round(speech_end, 3)})
+    if not labels:
+        return video, placed
+    chain = ";".join(chains) + ";" + \
+        f"[0:a]{''.join(labels)}amix=inputs={len(labels) + 1}:normalize=0" \
+        f":duration=first:dropout_transition=0[aout]"
+    run(cmd + ["-filter_complex", chain, "-map", "0:v", "-map", "[aout]",
+               "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest",
+               "-movflags", "+faststart", str(dest)],
+        f"laying {len(labels)} voice track(s) over the cut")
+    return dest, placed
 
 
 # The colour a text card is generated on. Theirs, and the reason is worth
@@ -410,6 +463,9 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
                 music_volume: float = 0.25,
                 music_duck: bool = True,
                 clip_audio: Optional[Sequence[Optional[str]]] = None,
+                clip_mute: Optional[Sequence[bool]] = None,
+                clip_trim: Optional[Sequence[Optional[Tuple[float, Optional[float]]]]] = None,
+                voice_tracks: Optional[Sequence[Dict[str, Any]]] = None,
                 text_card: Optional[Path] = None,
                 hook: Optional[Path] = None
                 ) -> Dict[str, Any]:
@@ -439,13 +495,30 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
             segments.append(p)
             manifest.append({"role": "hook", "source": str(hook),
                              "duration_s": round(duration_of(p), 3)})
+        # Which recording belongs to which shot, whether it is baked in
+        # (clip_audio) or laid over as a track (voice_tracks). The manifest is
+        # the human-readable record of the cut, so a shot still NAMES its line
+        # either way; `voices` below says where the track was placed.
+        hook_shift = 1 if hook else 0
+        voice_for = {int(t.get("segment", 0)) - hook_shift: Path(t["path"]).name
+                     for t in (voice_tracks or [])}
         for i, clip in enumerate(clips):
             track = (clip_audio or [None] * len(clips))[i] if clip_audio else None
+            spoken = Path(track).name if track else voice_for.get(i)
+            muted = bool(clip_mute[i]) if clip_mute and i < len(clip_mute) else False
+            trim = clip_trim[i] if clip_trim and i < len(clip_trim) else None
+            t_in = float(trim[0]) if trim else 0.0
+            t_len = (float(trim[1]) - t_in) if trim and trim[1] is not None else None
             p = normalise(Path(clip), work / f"seg_{i:02d}.mp4", size,
-                          audio=Path(track) if track else None)
+                          mute=muted, audio=Path(track) if track else None,
+                          start_s=t_in or None, trim_s=t_len)
             segments.append(p)
             manifest.append({"role": "clip", "source": str(clip),
-                             "voiceover": Path(track).name if track else None,
+                             "voiceover": spoken,
+                             # what the producer asked for, and what it meant
+                             # here: a separately spoken line is not silenced
+                             "muted": muted and not spoken,
+                             "trim": [t_in, None if t_len is None else t_in + t_len] if trim else None,
                              "duration_s": round(duration_of(p), 3)})
         if demo:
             p = normalise(Path(demo), work / "seg_demo.mp4", size, mute=True,
@@ -491,7 +564,26 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
             ass_path.write_text(ass_text, encoding="utf-8")
             joined = burn_subs(joined, ass_path, work / "subbed.mp4",
                                ffmpeg_with_libass(), fonts_dir, crf, preset)
+        voices = []
+        if voice_tracks:
+            # The spoken lines, laid over the cut as a TRACK rather than baked
+            # into their shots -- so a line can start late, be trimmed, or run
+            # on into the next shot, and a recording longer than its shot is
+            # no longer cut off in silence by -shortest.
+            #
+            # Where a shot starts on the timeline is the same sum crossfade()
+            # uses: every join consumes one fade. Anchored to the shot, so a
+            # trim or a reorder ahead of it moves the voice with its picture.
+            starts, acc = [], 0.0
+            clip_durs = [m["duration_s"] for m in manifest if m["role"] in ("clip", "hook")]
+            for k, dur in enumerate(clip_durs):
+                starts.append(acc - (k * crossfade_s if crossfade_s and len(clip_durs) > 1 else 0.0))
+                acc += dur
+            joined, voices = mix_voices(joined, voice_tracks, starts, speech_end,
+                                        work / "voiced.mp4", crf)
         if music:
+            # AFTER the voice: ducking keys off the speech, and a bed laid down
+            # first would not be pushed aside by a voice mixed in later.
             joined = mix_music(joined, Path(music), work / "mixed.mp4",
                                music_volume, music_duck, crf)
         carded = None
@@ -525,6 +617,9 @@ def build_final(clips: Sequence[Path], dest: Path, size: Size,
             "subtitle_lines": subtitle_count,
             "crossfade_s": crossfade_s,
             "music": Path(music).name if music else None,
+            "voices": voices,
+            "music_volume": music_volume if music else None,
+            "music_duck": music_duck if music else None,
             "text_card": carded,
         }
     finally:

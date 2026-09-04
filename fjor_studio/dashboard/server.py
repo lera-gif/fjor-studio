@@ -267,6 +267,7 @@ class Studio:
         from pathlib import Path as _P
         assets = _P(cfg.assets_dir)
         current = edit_of(job)
+        edit_cfg = (cfg.pipeline or {}).get("edit") or {}
         subs = dict((cfg.pipeline or {}).get("subtitles") or {})
         subs.update(current.get("subtitles") or {})
         return {
@@ -277,6 +278,18 @@ class Studio:
                         if s["idx"] not in {c["idx"] for c in cut_scenes(job)}],
             "music": current.get("music", ""),
             "music_library": list_music(assets),
+            "music_volume": float(current.get(
+                "music_volume", edit_cfg.get("music_volume", 0.25))),
+            "music_duck": bool(current.get(
+                "music_duck", edit_cfg.get("music_duck", True))),
+            "mute": list(current.get("mute") or []),
+            "trim": dict(current.get("trim") or {}),
+            "vo": dict(current.get("vo") or {}),
+            # the recordings' real lengths, so the page can bound in / out
+            "vo_lengths": self._vo_lengths(job),
+            # so the page can warn before the server refuses
+            "crossfade_s": float(job.intake.get(
+                "crossfade_s", edit_cfg.get("crossfade_s", 0.0)) or 0.0),
             "hook": current.get("hook", ""),
             "insert": current.get("insert", ""),
             "library": library_mod.list_items(assets),
@@ -294,6 +307,20 @@ class Studio:
             # producer treating an edit as something that might cost credits
             "recut_costs": 0.0,
         }
+
+    def _vo_lengths(self, job) -> Dict[str, float]:
+        from ..assemble import duration_of
+        _cfg, store, _engine = self.open()
+        job_dir = store.job_dir(job.id)
+        out: Dict[str, float] = {}
+        for s in job.scenes:
+            rel = s.get("vo_track")
+            if rel and (job_dir / rel).is_file():
+                try:
+                    out[str(s["idx"])] = round(float(duration_of(job_dir / rel)), 2)
+                except Exception:  # noqa: BLE001
+                    pass
+        return out
 
     def _finals(self, job) -> List[Dict[str, Any]]:
         """Watchable on the page, not only present in the week folder."""

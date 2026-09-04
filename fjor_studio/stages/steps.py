@@ -1316,6 +1316,12 @@ def _edit_signature(ctx: StageContext, inputs: Dict[str, Any]) -> str:
     the new cut and drifts further with every transition, silently."""
     import hashlib
     parts = [f"{s['idx']}:{s.get('clip')}" for s in cut_scenes(ctx.job)]
+    # a muted on-camera shot has nothing to transcribe: the words change
+    parts += [f"mute={sorted(edit_of(ctx.job).get('mute') or [])}",
+              # a trim moves every word after it: the timeline is not the same
+              f"trim={sorted((edit_of(ctx.job).get('trim') or {}).items())}",
+              # a moved or trimmed voice moves its words
+              f"vo={sorted((edit_of(ctx.job).get('vo') or {}).items())}"]
     parts += [f"xfade={inputs.get('crossfade_s')}",
               f"intopack={inputs.get('crossfade_into_packshot')}",
               f"demo={inputs.get('demo')}", f"trim={inputs.get('demo_trim_s')}",
@@ -1405,8 +1411,12 @@ def _assembly_inputs(ctx: StageContext, size):
         "crossfade_s": float(intake.get("crossfade_s", edit.get("crossfade_s", 0.0))),
         "crossfade_into_packshot": bool(edit.get("crossfade_into_packshot", True)),
         "music": music,
-        "music_volume": float(edit.get("music_volume", 0.25)),
-        "music_duck": bool(edit.get("music_duck", True)),
+        # the producer's choice at a gate wins over the configured default,
+        # like the bed itself does
+        "music_volume": float(edit_of(ctx.job).get(
+            "music_volume", edit.get("music_volume", 0.25))),
+        "music_duck": bool(edit_of(ctx.job).get(
+            "music_duck", edit.get("music_duck", True))),
         "packshot": packshot,
         "demo": demo,
         "hook": hook,
@@ -1467,6 +1477,45 @@ def _clip_audio(ctx: StageContext):
             for s in cut_scenes(ctx.job)]
 
 
+def _clip_trim(ctx: StageContext):
+    """Per-clip [in, out] in seconds, None where the shot runs whole. Aligned
+    with `_clip_audio` and `_clip_mute`; reaches BOTH cuts assembly makes, or
+    the subtitle probe would be timed against a different film."""
+    trims = edit_of(ctx.job).get("trim") or {}
+    out = []
+    for s in cut_scenes(ctx.job):
+        t = trims.get(str(s["idx"]))
+        out.append((float(t[0] or 0.0), None if t[1] is None else float(t[1]))
+                   if t else None)
+    return out
+
+
+def _voice_tracks(ctx: StageContext):
+    """The spoken lines as a TRACK over the cut, one entry per shot that has a
+    recording. Untouched, a line sits where it always did -- the start of its
+    shot -- but is no longer cut off at the shot's end."""
+    vo = edit_of(ctx.job).get("vo") or {}
+    shift = 1 if edit_of(ctx.job).get("hook") else 0     # the hook is segment 0
+    out = []
+    for k, s in enumerate(cut_scenes(ctx.job)):
+        k = k + shift
+        if not s.get("vo_track"):
+            continue
+        e = vo.get(str(s["idx"])) or {}
+        out.append({"path": str(ctx.job_dir / s["vo_track"]), "segment": k,
+                    "scene": s["idx"], "offset": float(e.get("offset") or 0.0),
+                    "in": float(e.get("in") or 0.0), "out": e.get("out")})
+    return out
+
+
+def _clip_mute(ctx: StageContext):
+    """Per-clip: does the producer want this shot's own audio gone? Aligned
+    with `_clip_audio`, and subordinate to it -- a shot with a separately
+    spoken line keeps that line regardless."""
+    muted = set(edit_of(ctx.job).get("mute") or [])
+    return [s["idx"] in muted for s in cut_scenes(ctx.job)]
+
+
 def assembly(ctx: StageContext) -> None:
     """Step 6, first half: cut the draft the producer reviews at GATE_DRAFT.
 
@@ -1484,7 +1533,9 @@ def assembly(ctx: StageContext) -> None:
             # a silent first pass establishes the real timeline, so the words are
             # transcribed against the cut they will actually sit on
             probe_cut = build_final(_clip_paths(ctx), ctx.dir("draft") / "_timing.mp4",
-                                    size, clip_audio=_clip_audio(ctx),
+                                    size, voice_tracks=_voice_tracks(ctx),
+                                    clip_mute=_clip_mute(ctx),
+                                    clip_trim=_clip_trim(ctx),
                                     **dict(inputs, subtitle_style=None,
                                                  disclaimer=None, badge=None,
                                                  crf=34, preset="ultrafast"))
@@ -1493,7 +1544,9 @@ def assembly(ctx: StageContext) -> None:
                 probe_cut["speech_end_s"], _edit_signature(ctx, inputs))
             (ctx.dir("draft") / "_timing.mp4").unlink(missing_ok=True)
         report = build_final(_clip_paths(ctx), draft, size,
-                             clip_audio=_clip_audio(ctx), **inputs)
+                             voice_tracks=_voice_tracks(ctx),
+                             clip_mute=_clip_mute(ctx),
+                             clip_trim=_clip_trim(ctx), **inputs)
     except AssembleError as exc:
         raise GenError(f"assembly: {exc}")
     (ctx.dir("draft") / "edit_manifest.json").write_text(

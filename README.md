@@ -69,7 +69,12 @@ regeneration. Jobs advance on one background queue, so nothing overlaps.
 At **GATE_CLIPS** (the shots, before they are cut together) and again at
 **GATE_DRAFT** (the cut itself) there is an editor: drag a shot to move it in the
 running order, drag it to the tray to take it out of the cut (or drag it back
-in), pick the music bed, set the subtitle colour and size or turn them off. Applying re-cuts the draft — ffmpeg only, nothing is bought
+in), pick the music bed, set the subtitle colour and size or turn them off.
+Each shot also takes an **in / out trim** in seconds and a **mute** for its own
+sound; the bed has a **volume** and a choice of ducking under speech or not;
+and a shot whose line was spoken separately shows a **🎙 row** where that
+recording can be started later into the shot (or pushed past it into the
+next), and trimmed. Applying re-cuts the draft — ffmpeg only, nothing is bought
 again. That is why the bed is no longer a question the brief asks: it is judged
 against the cut, not imagined before it — and the editor plays a bed before you
 choose it. The same editor opens the cut with a **hook** or places a product
