@@ -5,7 +5,7 @@ import pytest
 
 from conftest import make_job, scene_plan, write_config, write_replies
 from fjor_studio.app import open_studio
-from fjor_studio.derive import DeriveError, derive
+from fjor_studio.derive import FROM_STAGES, DeriveError, derive
 from fjor_studio.derive import plan as derive_plan
 
 
@@ -157,3 +157,62 @@ def test_the_plan_preview_has_no_side_effects(finished):
     p = derive_plan(job, "clips")
     assert p["rebuys"] == ["clips"] and p["plates_kept"] == 2
     assert set(store.list_ids()) == before
+
+
+# -- the voiceover, which is a file and a reference and must not be split ------
+#
+# SL041 (derived from SL040 at 'prompts') failed at assembly on a missing
+# audio/scene_00_vo.wav. The reference travelled and the file did not, and
+# `voiceovers` skips any scene that already has a vo_track -- so nothing was
+# re-bought and nothing said so until ffmpeg could not open the input.
+
+def _give_everyone_a_voice(store, job):
+    """Make the parent's shots carry recorded voiceovers, on disk."""
+    job_dir = store.job_dir(job.id)
+    (job_dir / "audio").mkdir(parents=True, exist_ok=True)
+    for s in job.scene_objs():
+        s.voice, s.line = "vo", f"line for scene {s.idx}"
+        s.vo_track = f"audio/scene_{s.idx:02d}_vo.wav"
+        (job_dir / s.vo_track).write_bytes(b"RIFF fake wav")
+        job.put_scene(s)
+        job.add_artifact("audio", s.vo_track)
+    store.save(job)
+    return job
+
+
+def test_deriving_at_prompts_drops_the_old_recording(finished):
+    """The line is about to be rewritten, so the old recording is a voice
+    saying words that are no longer in the script."""
+    _cfg, store, _engine, src = finished
+    _give_everyone_a_voice(store, src)
+    child = derive(store, src.id, "SL900", "prompts")
+    assert all(s.get("vo_track") is None for s in child.scenes)
+
+
+def test_deriving_at_plates_carries_the_recording_as_a_file(finished):
+    """The line comes across unchanged, so the recording is still correct --
+    and it was already paid for."""
+    _cfg, store, _engine, src = finished
+    _give_everyone_a_voice(store, src)
+    child = derive(store, src.id, "SL901", "plates")
+    child_dir = store.job_dir(child.id)
+    for s in child.scenes:
+        assert s["vo_track"], "the reference was dropped but the line is the same"
+        assert (child_dir / s["vo_track"]).is_file(), (
+            f"{s['vo_track']} is referenced but not on disk -- assembly will "
+            f"die on a missing input")
+
+
+def test_no_derived_job_ever_names_a_voiceover_it_does_not_have(finished):
+    """The invariant, across every starting point: a vo_track either resolves
+    to a real file or is absent. Nothing in between ships."""
+    _cfg, store, _engine, src = finished
+    _give_everyone_a_voice(store, src)
+    for i, stage in enumerate(FROM_STAGES):
+        child = derive(store, src.id, f"SL91{i}", stage)
+        child_dir = store.job_dir(child.id)
+        for s in child.scenes:
+            rel = s.get("vo_track")
+            assert rel is None or (child_dir / rel).is_file(), (
+                f"derived at '{stage}': scene {s['idx']} names {rel}, "
+                f"which is not there")

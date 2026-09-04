@@ -116,11 +116,24 @@ def derive(store: JobStore, source_id: str, new_id: str, from_stage: str,
         _copy_dir(src_dir / "plates", dst_dir / "plates")
     if "clips" in keeps:
         _copy_dir(src_dir / "clips", dst_dir / "clips")
+    if "prompts" in keeps:
+        # The recordings travel with the LINES. A "vo" shot is generated silent
+        # and its words are spoken separately, so the clip alone is mute -- and
+        # `voiceovers` skips any scene that already has a `vo_track`, so an
+        # inherited path with no file behind it is never re-bought and assembly
+        # dies on a missing input (SL041). Either the audio comes across or the
+        # reference to it goes; there is no third option that works.
+        _copy_dir(src_dir / "audio", dst_dir / "audio")
 
     for raw in source.scenes:
         s = Scene(**raw)
         if "prompts" not in keeps:
             s.image_prompt = s.video_prompt = ""
+            # and the voiceover with them. The line is about to be REWRITTEN,
+            # so a recording of the old one is not an inherited asset -- it is
+            # a voice saying words that are no longer in the script. Cleared,
+            # `voiceovers` speaks the new line; kept, it would skip the shot.
+            s.vo_track = None
         if "plates" not in keeps:
             s.plate, s.plate_attempts, s.plate_qa = None, 0, None
         if "clips" not in keeps:
@@ -156,7 +169,7 @@ def derive(store: JobStore, source_id: str, new_id: str, from_stage: str,
                 continue
             (dst_dir / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_dir / rel, dst_dir / rel)
-    for stage in ("ref", "analysis", "plates", "clips"):
+    for stage in ("ref", "analysis", "plates", "clips", "audio"):
         for path in sorted((dst_dir / stage).glob("*")):
             if path.is_file():
                 job.add_artifact(stage, f"{stage}/{path.name}")
